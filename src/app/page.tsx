@@ -1,7 +1,10 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
-  return (
-    <main>Hello</main>
-  );
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { redirect } from 'next/navigation';
+
+export default function RootPage() {
+  redirect('/home');
+  return null;
 }
