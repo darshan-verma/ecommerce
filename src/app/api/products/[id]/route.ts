@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import Product from "@/models/Product";
+import mongoose from "mongoose";
 
 // Get product by ID
 // GET /api/products/[id]
@@ -9,18 +10,42 @@ export async function GET(
 	{ params }: { params: { id: string } }
 ) {
 	try {
+		console.log("Connecting to DB...");
 		await connectDB();
+		console.log("Connected to DB");
 
+		console.log("Received ID:", params.id);
+
+		if (!mongoose.Types.ObjectId.isValid(params.id)) {
+			console.log("Invalid ID format:", params.id);
+			return NextResponse.json(
+				{ error: "Invalid product ID format" },
+				{ status: 400 }
+			);
+		}
+
+		console.log("Searching for product with ID:", params.id);
 		const product = await Product.findById(params.id);
+		console.log("Found product:", product);
 
 		if (!product) {
+			console.log("Product not found");
 			return NextResponse.json({ error: "Product not found" }, { status: 404 });
 		}
 
 		return NextResponse.json(product);
 	} catch (error) {
+		console.error("Error in GET /api/products/[id]:", error);
 		return NextResponse.json(
-			{ error: "Failed to fetch product", details: error },
+			{
+				error: "Failed to fetch product",
+				details:
+					process.env.NODE_ENV === "development"
+						? error instanceof Error
+							? error.message
+							: String(error)
+						: undefined,
+			},
 			{ status: 500 }
 		);
 	}
