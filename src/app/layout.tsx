@@ -29,11 +29,12 @@ export default function RootLayout({
 		<html lang="en">
 			<body
 				className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+				suppressHydrationWarning
 			>
 				<AuthProvider>
 					<App>{children}</App>
 				</AuthProvider>
-        <Toaster position="bottom-center"/>
+				<Toaster position="bottom-center" />
 			</body>
 		</html>
 	);

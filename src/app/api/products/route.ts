@@ -3,7 +3,7 @@ import { connectDB } from "@/lib/db";
 import Product from "@/models/Product";
 // Get all products
 // GET /api/products
-// Optional query params: ?keyword=...&category=...&price[gte]=...&price[lte]=...&page=...
+// Optional query params: ?keyword=...&category=...&price[gte]=...&price[lte]=...&page=...&limit=...
 export async function GET(request: Request) {
 	try {
 		await connectDB();
@@ -13,7 +13,7 @@ export async function GET(request: Request) {
 		const priceGte = searchParams.get("price[gte]");
 		const priceLte = searchParams.get("price[lte]");
 		const page = parseInt(searchParams.get("page") || "1");
-		const perPage = 8; // Products per page
+		const limit = parseInt(searchParams.get("limit") || "9"); // Default to 9 products per page
 
 		const query: any = {};
 
@@ -36,13 +36,13 @@ export async function GET(request: Request) {
 
 		const count = await Product.countDocuments(query);
 		const products = await Product.find(query)
-			.limit(perPage)
-			.skip(perPage * (page - 1));
+			.limit(limit)
+			.skip(limit * (page - 1));
 
 		return NextResponse.json({
 			products,
 			page,
-			pages: Math.ceil(count / perPage),
+			pages: Math.ceil(count / limit),
 			total: count,
 		});
 	} catch (error) {
