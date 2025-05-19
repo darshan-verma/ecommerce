@@ -19,12 +19,42 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Pencil, Trash2 } from "lucide-react";
 
 interface Category {
 	_id: string;
 	name: string;
 	slug: string;
 }
+
+type ProductData = {
+	_id: string;
+	name: string;
+	description: string;
+	price: number;
+	images: Array<{ public_id: string; url: string }>;
+	category: string;
+	stock: number;
+	ratings: number;
+	reviews: Array<{
+		user: string;
+		name: string;
+		rating: number;
+		comment: string;
+	}>;
+	createdAt: string;
+	updatedAt: string;
+};
 
 // Custom hook for debouncing
 const useDebounce = (value: string, delay: number) => {
@@ -49,16 +79,22 @@ export default function AdminProductsPage() {
 	const [selectedCategory, setSelectedCategory] = useState<string>("");
 	const [isLoading, setIsLoading] = useState(true);
 	const [isSubmitting, setIsSubmitting] = useState(false);
-	const [searchQuery, setSearchQuery] = useState("");
-	const debouncedSearchQuery = useDebounce(searchQuery, 500);
-	const [sortOption, setSortOption] = useState("newest");
 	const [error, setError] = useState<string | null>(null);
+	const [searchQuery, setSearchQuery] = useState("");
+	const [sortOption, setSortOption] = useState("newest");
 	const [pagination, setPagination] = useState({
 		page: 1,
-		pages: 1,
+		limit: 10,
 		total: 0,
-		perPage: 9,
+		pages: 1,
 	});
+	const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+	const [productToDelete, setProductToDelete] = useState<string | null>(null);
+	const [editingProduct, setEditingProduct] = useState<ProductData | null>(
+		null
+	);
+	const [activeTab, setActiveTab] = useState("list");
+	const debouncedSearchQuery = useDebounce(searchQuery, 500);
 	const isMounted = useRef(true);
 
 	// Fetch categories
@@ -121,7 +157,7 @@ export default function AdminProductsPage() {
 						page: data.page || 1,
 						pages: data.pages || 1,
 						total: data.total || 0,
-						perPage: 9,
+						limit: 9,
 					});
 				}
 			} catch (error) {
@@ -230,10 +266,7 @@ export default function AdminProductsPage() {
 			setProducts((prevProducts) => [...prevProducts, newProduct]);
 
 			// Switch to the products list tab
-			// You'll need to add state for the active tab
-			// const [activeTab, setActiveTab] = useState("list");
-			// Then uncomment this:
-			// setActiveTab("list");
+			setActiveTab("list");
 
 			toast({
 				title: "Success",
@@ -247,6 +280,116 @@ export default function AdminProductsPage() {
 				// variant: "destructive",
 			});
 			throw error;
+		}
+	};
+
+	// Handle delete product
+	const handleDeleteClick = (productId: string) => {
+		setProductToDelete(productId);
+		setIsDeleteDialogOpen(true);
+	};
+
+	const handleDeleteConfirm = async () => {
+		if (!productToDelete) return;
+
+		try {
+			setIsLoading(true);
+			const response = await fetch(`/api/products/${productToDelete}`, {
+				method: "DELETE",
+			});
+
+			if (!response.ok) {
+				throw new Error("Failed to delete product");
+			}
+
+			// Remove the product from the local state
+			setProducts(
+				products.filter((product) => product._id !== productToDelete)
+			);
+			toast({
+				title: "Success",
+				description: "Product deleted successfully",
+			});
+		} catch (error) {
+			console.error("Error deleting product:", error);
+			toast({
+				title: "Error",
+				description: "Failed to delete product",
+				// variant: "destructive",
+			});
+		} finally {
+			setIsLoading(false);
+			setIsDeleteDialogOpen(false);
+			setProductToDelete(null);
+		}
+	};
+
+	// Handle edit product
+	const handleEditClick = (product: IProduct) => {
+		// Create a plain object with the product data
+		const productData: ProductData = {
+			...product,
+			category:
+				// Handle both object and string categories
+				typeof product.category === "object" && product.category !== null
+					? (product.category as any)._id?.toString() || ""
+					: (product.category as string) || "",
+		};
+		setEditingProduct(productData);
+		setActiveTab("add"); // Switch to the form tab
+	};
+
+	const handleCancelEdit = () => {
+		setEditingProduct(null);
+	};
+
+	const handleUpdateProduct = async (data: any) => {
+		if (!editingProduct) return;
+
+		try {
+			setIsSubmitting(true);
+			const response = await fetch(`/api/products/${editingProduct._id}`, {
+				method: "PUT",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					...data,
+					images: [
+						{
+							public_id: data.images?.[0]?.public_id || `product_${Date.now()}`,
+							url: data.imageUrl,
+						},
+					],
+				}),
+			});
+
+			if (!response.ok) {
+				throw new Error("Failed to update product");
+			}
+
+			const updatedProduct = await response.json();
+
+			// Update the product in the local state
+			setProducts(
+				products.map((p) => (p._id === updatedProduct._id ? updatedProduct : p))
+			);
+
+			setEditingProduct(null);
+			toast({
+				title: "Success",
+				description: "Product updated successfully",
+			});
+		} catch (error) {
+			console.error("Error updating product:", error);
+			toast({
+				title: "Error",
+				description: "Failed to update product",
+				// variant: "destructive",
+			});
+			throw error;
+		} finally {
+			setIsSubmitting(false);
 		}
 	};
 
@@ -345,12 +488,24 @@ export default function AdminProductsPage() {
 				</div>
 			</div>
 
-			<Tabs defaultValue="list" className="space-y-4">
+			<Tabs
+				value={activeTab}
+				onValueChange={setActiveTab}
+				className="space-y-4"
+			>
 				<TabsList>
 					<TabsTrigger value="list">
 						All Products ({filteredAndSortedProducts.length})
 					</TabsTrigger>
-					<TabsTrigger value="add">Add New Product</TabsTrigger>
+					<TabsTrigger
+						value="add"
+						onClick={() => {
+							setEditingProduct(null);
+							setActiveTab("add");
+						}}
+					>
+						{editingProduct ? "Cancel Edit" : "Add New Product"}
+					</TabsTrigger>
 				</TabsList>
 
 				<TabsContent value="list" className="space-y-4">
@@ -393,7 +548,25 @@ export default function AdminProductsPage() {
 							) : (
 								<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 									{filteredAndSortedProducts.map((product) => (
-										<Card key={product._id.toString()}>
+										<Card key={product._id.toString()} className="relative">
+											<div className="absolute top-2 right-2 flex gap-2">
+												<Button
+													variant="outline"
+													size="icon"
+													className="h-8 w-8"
+													onClick={() => handleEditClick(product)}
+												>
+													<Pencil className="h-4 w-4" />
+												</Button>
+												<Button
+													variant="outline"
+													size="icon"
+													className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+													onClick={() => handleDeleteClick(product._id)}
+												>
+													<Trash2 className="h-4 w-4" />
+												</Button>
+											</div>
 											<CardContent className="p-4">
 												<img
 													src={product.images?.[0]?.url || "/placeholder.svg"}
@@ -419,11 +592,22 @@ export default function AdminProductsPage() {
 				<TabsContent value="add">
 					<Card>
 						<CardHeader>
-							<CardTitle>Add New Product</CardTitle>
-							<CardDescription>Add a new product to your store</CardDescription>
+							<CardTitle>
+								{editingProduct ? "Edit Product" : "Add New Product"}
+							</CardTitle>
+							<CardDescription>
+								{editingProduct
+									? "Update the product details"
+									: "Add a new product to your store"}
+							</CardDescription>
 						</CardHeader>
 						<CardContent>
-							<ProductForm onSubmit={handleSubmit} />
+							<ProductForm
+								product={editingProduct || undefined}
+								onSubmit={editingProduct ? handleUpdateProduct : handleSubmit}
+								onCancel={editingProduct ? handleCancelEdit : undefined}
+								isSubmitting={isSubmitting}
+							/>
 						</CardContent>
 					</Card>
 				</TabsContent>
@@ -450,6 +634,31 @@ export default function AdminProductsPage() {
 					</Button>
 				</div>
 			)}
+
+			{/* Delete Confirmation Dialog */}
+			<AlertDialog
+				open={isDeleteDialogOpen}
+				onOpenChange={setIsDeleteDialogOpen}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>Are you sure?</AlertDialogTitle>
+						<AlertDialogDescription>
+							This action cannot be undone. This will permanently delete the
+							product and remove it from your store.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>Cancel</AlertDialogCancel>
+						<AlertDialogAction
+							onClick={handleDeleteConfirm}
+							className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+						>
+							Delete
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</div>
 	);
 }

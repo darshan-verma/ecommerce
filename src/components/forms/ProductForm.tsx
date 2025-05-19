@@ -78,6 +78,7 @@ const defaultValues: Partial<ProductFormValues> = {
 	name: "",
 	description: "",
 	price: 0,
+	category: "",
 	stock: 0,
 	imageUrl: "",
 };
@@ -85,14 +86,18 @@ const defaultValues: Partial<ProductFormValues> = {
 // In ProductForm component, update the form's onSubmit handler:
 
 interface ProductFormProps {
-	product?: ProductFormValues & { id?: string };
+	product?: (ProductFormValues & { id?: string }) & {
+		category?: string | { _id: string; name: string };
+	};
 	onSubmit: (data: ProductFormValues) => Promise<void>;
+	onCancel?: () => void;
 	isSubmitting?: boolean;
 }
 
 export function ProductForm({
 	product,
 	onSubmit,
+	onCancel,
 	isSubmitting = false,
 }: ProductFormProps) {
 	const [categories, setCategories] = useState<Category[]>([]);
@@ -124,18 +129,43 @@ export function ProductForm({
 		fetchCategories();
 	}, []);
 
+	// Initialize form with default values or product data
 	const form = useForm<ProductFormValues>({
 		resolver: zodResolver(formSchema),
-		defaultValues: product || defaultValues,
+		defaultValues: {
+			...defaultValues,
+			...product, // This will override default values with product data if it exists
+		},
 	});
+
+	// Reset form when product prop changes (for edit mode)
+	useEffect(() => {
+		if (product) {
+			form.reset({
+				...defaultValues,
+				...product,
+				category:
+					product.category && typeof product.category === "object"
+						? (product.category as { _id: string })._id
+						: product.category || "",
+			});
+		} else {
+			form.reset(defaultValues);
+		}
+	}, [product, form]);
 
 	const handleFormSubmit = async (data: ProductFormValues) => {
 		try {
 			await onSubmit(data);
-			form.reset(defaultValues);
+			// Only reset if not in edit mode
+			if (!product?.id) {
+				form.reset(defaultValues);
+			}
 			toast({
-				title: "Success",
-				description: "Product saved successfully!",
+				title: product?.id ? "Updated!" : "Success!",
+				description: product?.id
+					? "Product has been updated successfully."
+					: "Product has been created successfully.",
 			});
 		} catch (error) {
 			console.error("Error saving product:", error);
@@ -143,7 +173,6 @@ export function ProductForm({
 				title: "Error",
 				description:
 					error instanceof Error ? error.message : "Failed to save product",
-				// variant: "destructive",
 			});
 		}
 	};
@@ -270,38 +299,18 @@ export function ProductForm({
 				</div>
 
 				<div className="flex justify-end space-x-4">
-					<Button
-						type="submit"
-						disabled={isSubmitting}
-						className="w-full sm:w-auto"
-					>
-						{isSubmitting ? (
-							<>
-								<svg
-									className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
-									xmlns="http://www.w3.org/2000/svg"
-									fill="none"
-									viewBox="0 0 24 24"
-								>
-									<circle
-										className="opacity-25"
-										cx="12"
-										cy="12"
-										r="10"
-										stroke="currentColor"
-										strokeWidth="4"
-									></circle>
-									<path
-										className="opacity-75"
-										fill="currentColor"
-										d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-									></path>
-								</svg>
-								Saving...
-							</>
-						) : (
-							"Save Product"
-						)}
+					{onCancel && (
+						<Button
+							type="button"
+							variant="outline"
+							onClick={onCancel}
+							disabled={isSubmitting}
+						>
+							Cancel
+						</Button>
+					)}
+					<Button type="submit" disabled={isSubmitting}>
+						{isSubmitting ? "Saving..." : "Save Product"}
 					</Button>
 				</div>
 			</form>
