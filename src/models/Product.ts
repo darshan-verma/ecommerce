@@ -9,7 +9,13 @@ export interface IProduct extends Document {
 		public_id: string;
 		url: string;
 	}>;
-	category: string;
+	category:
+		| string
+		| {
+				_id: string;
+				name: string;
+				[key: string]: any;
+		};
 	stock: number;
 	ratings: number;
 	reviews: Array<{
@@ -33,7 +39,7 @@ const productSchema = new Schema<IProduct>(
 				url: { type: String, required: true },
 			},
 		],
-		category: { type: String, required: true },
+		category: { type: Schema.Types.Mixed, required: true },
 		stock: { type: Number, required: true, default: 0, min: 0 },
 		ratings: { type: Number, default: 0 },
 		reviews: [

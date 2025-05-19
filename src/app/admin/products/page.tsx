@@ -326,15 +326,40 @@ export default function AdminProductsPage() {
 
 	// Handle edit product
 	const handleEditClick = (product: IProduct) => {
+		// Safely extract the category ID
+		const getCategoryId = (category: any): string => {
+			if (!category) return "";
+			if (typeof category === "string") return category;
+			return category._id?.toString() || "";
+		};
+
 		// Create a plain object with the product data
 		const productData: ProductData = {
-			...product,
-			category:
-				// Handle both object and string categories
-				typeof product.category === "object" && product.category !== null
-					? (product.category as any)._id?.toString() || ""
-					: (product.category as string) || "",
+			_id: product._id?.toString() || "",
+			name: product.name || "",
+			description: product.description || "",
+			price: product.price || 0,
+			images: Array.isArray(product.images)
+				? product.images.map((img) => ({
+						public_id: img?.public_id || "",
+						url: img?.url || "",
+				}))
+				: [],
+			category: getCategoryId(product.category),
+			stock: product.stock || 0,
+			ratings: product.ratings || 0,
+			reviews: Array.isArray(product.reviews)
+				? product.reviews.map((review) => ({
+						user: review.user?.toString() || "",
+						name: review.name || "",
+						rating: review.rating || 0,
+						comment: review.comment || "",
+				  }))
+				: [],
+			createdAt: product.createdAt?.toString() || new Date().toISOString(),
+			updatedAt: product.updatedAt?.toString() || new Date().toISOString(),
 		};
+
 		setEditingProduct(productData);
 		setActiveTab("add"); // Switch to the form tab
 	};
