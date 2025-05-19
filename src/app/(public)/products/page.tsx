@@ -14,6 +14,7 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { useRouter, useSearchParams } from "next/navigation";
 
 interface Product {
 	_id: string;
@@ -27,142 +28,147 @@ interface Product {
 	ratings?: number;
 }
 
+interface Category {
+	_id: string;
+	name: string;
+	slug: string;
+}
+
 export default function ProductsPage() {
+	const router = useRouter();
+	const searchParams = useSearchParams();
+
 	const [products, setProducts] = useState<Product[]>([]);
-	const [loading, setLoading] = useState(true);
-	const [searchQuery, setSearchQuery] = useState("");
+	const [categories, setCategories] = useState<Category[]>([]);
+	const [selectedCategory, setSelectedCategory] = useState<string>(
+		searchParams.get("category") || ""
+	);
+	const [searchQuery, setSearchQuery] = useState(
+		searchParams.get("keyword") || ""
+	);
+	const [isLoading, setIsLoading] = useState(true);
+	const [error, setError] = useState<string | null>(null);
 	const [sortOption, setSortOption] = useState("newest");
-	const [categories, setCategories] = useState<string[]>([]);
-	const [selectedCategory, setSelectedCategory] = useState("all");
-	const [pagination, setPagination] = useState({
-		page: 1,
-		pages: 1,
-		total: 0,
-		perPage: 12,
-	});
 
-	const useDebounce = (value: string, delay: number) => {
-		const [debouncedValue, setDebouncedValue] = useState(value);
+	const updateUrl = useCallback(
+		(updates: { category?: string; keyword?: string }) => {
+			const params = new URLSearchParams(searchParams);
 
-		useEffect(() => {
-			const handler = setTimeout(() => {
-				setDebouncedValue(value);
-			}, delay);
-
-			return () => {
-				clearTimeout(handler);
-			};
-		}, [value, delay]);
-
-		return debouncedValue;
-	};
-
-	const debouncedSearchQuery = useDebounce(searchQuery, 500);
-
-	const fetchProducts = useCallback(
-		async (page = 1) => {
-			try {
-				setLoading(true);
-
-				const url = new URL("/api/products", window.location.origin);
-				url.searchParams.set("page", page.toString());
-				url.searchParams.set("limit", "12");
-
-				if (debouncedSearchQuery) {
-					url.searchParams.set("keyword", debouncedSearchQuery);
+			if (updates.category !== undefined) {
+				if (updates.category) {
+					params.set("category", updates.category);
+				} else {
+					params.delete("category");
 				}
-
-				if (selectedCategory !== "all") {
-					url.searchParams.set("category", selectedCategory);
-				}
-
-				const response = await fetch(url.toString());
-				const data = await response.json();
-
-				setProducts(data.products || []);
-
-				setPagination({
-					page: data.page || 1,
-					pages: data.pages || 1,
-					total: data.total || 0,
-					perPage: 12,
-				});
-
-				const uniqueCategories = [
-					...new Set<string>(
-						(data.products || [])
-							.map((p: Product) => p.category)
-							.filter((category: string): category is string =>
-								Boolean(category)
-							)
-					),
-				];
-				setCategories(uniqueCategories);
-			} catch (error) {
-				console.error("Error in fetchProducts:", error);
-				setProducts([]);
-			} finally {
-				setLoading(false);
 			}
+
+			if (updates.keyword !== undefined) {
+				if (updates.keyword) {
+					params.set("keyword", updates.keyword);
+				} else {
+					params.delete("keyword");
+				}
+			}
+
+			// Update URL without page reload
+			router.push(`?${params.toString()}`, { scroll: false });
 		},
-		[debouncedSearchQuery, selectedCategory]
+		[router, searchParams]
 	);
 
+	const handleCategoryChange = useCallback(
+		(value: string) => {
+			const newCategory = value === "all" ? "" : value;
+			setSelectedCategory(newCategory);
+			updateUrl({ category: newCategory });
+		},
+		[updateUrl]
+	);
+
+	const handleSearch = useCallback(
+		(e: React.ChangeEvent<HTMLInputElement>) => {
+			const value = e.target.value;
+			setSearchQuery(value);
+
+			// Debounce search updates
+			const timer = setTimeout(() => {
+				updateUrl({ keyword: value });
+			}, 500);
+
+			return () => clearTimeout(timer);
+		},
+		[updateUrl]
+	);
+
+	const fetchProducts = useCallback(async () => {
+		try {
+			setIsLoading(true);
+			setError(null);
+
+			const params = new URLSearchParams();
+			if (searchQuery) params.set("keyword", searchQuery);
+			if (selectedCategory) params.set("category", selectedCategory);
+
+			const response = await fetch(`/api/products?${params.toString()}`);
+			if (!response.ok) throw new Error("Failed to fetch products");
+
+			const data = await response.json();
+			setProducts(data.products || []);
+		} catch (error) {
+			console.error("Error fetching products:", error);
+			setError("Failed to load products. Please try again later.");
+		} finally {
+			setIsLoading(false);
+		}
+	}, [searchQuery, selectedCategory]);
+
+	const fetchCategories = useCallback(async () => {
+		try {
+			const response = await fetch("/api/categories/active");
+			if (!response.ok) throw new Error("Failed to fetch categories");
+			const data = await response.json();
+			setCategories(data);
+		} catch (error) {
+			console.error("Error fetching categories:", error);
+			setError("Failed to load categories");
+		}
+	}, []);
+
 	useEffect(() => {
-		const fetchData = async () => {
-			await fetchProducts(1);
-		};
-		fetchData();
-	}, [debouncedSearchQuery, selectedCategory, fetchProducts]);
+		fetchCategories();
+		fetchProducts();
+	}, [fetchCategories, fetchProducts]);
 
-	const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		e.preventDefault();
-		setSearchQuery(e.target.value);
-	};
-
-	const filteredProducts = useMemo(() => {
+	const filteredAndSortedProducts = useMemo(() => {
 		let result = [...products];
 
-		if (selectedCategory !== "all") {
-			result = result.filter(
-				(product) => product.category === selectedCategory
-			);
-		}
-
-		if (debouncedSearchQuery) {
-			const query = debouncedSearchQuery.toLowerCase();
-			result = result.filter(
-				(product) =>
-					product.name.toLowerCase().includes(query) ||
-					product.description.toLowerCase().includes(query)
-			);
-		}
-
-		return result.sort((a, b) => {
-			switch (sortOption) {
-				case "price-asc":
-					return a.price - b.price;
-				case "price-desc":
-					return b.price - a.price;
-				case "name-asc":
-					return a.name.localeCompare(b.name);
-				case "name-desc":
-					return b.name.localeCompare(a.name);
-				case "newest":
-					return (
+		switch (sortOption) {
+			case "price-asc":
+				result.sort((a, b) => a.price - b.price);
+				break;
+			case "price-desc":
+				result.sort((a, b) => b.price - a.price);
+				break;
+			case "name-asc":
+				result.sort((a, b) => a.name.localeCompare(b.name));
+				break;
+			case "name-desc":
+				result.sort((a, b) => b.name.localeCompare(a.name));
+				break;
+			case "newest":
+				result.sort(
+					(a, b) =>
 						new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-					);
-				case "oldest":
-					return (
-						new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-					);
-				default:
-					return 0;
-			}
-		});
-	}, [products, sortOption, debouncedSearchQuery, selectedCategory]);
+				);
+				break;
+			default:
+				break;
+		}
 
-	if (loading) {
+		return result;
+	}, [products, sortOption]);
+
+	if (isLoading) {
 		return (
 			<div className="container mx-auto py-8 px-4">
 				<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
@@ -182,8 +188,8 @@ export default function ProductsPage() {
 				<div>
 					<h1 className="text-3xl font-bold">Our Products</h1>
 					<p className="text-muted-foreground">
-						{filteredProducts.length} products found
-						{debouncedSearchQuery ? ` for "${debouncedSearchQuery}"` : ""}
+						{filteredAndSortedProducts.length} products found
+						{searchQuery ? ` for "${searchQuery}"` : ""}
 					</p>
 				</div>
 
@@ -195,18 +201,21 @@ export default function ProductsPage() {
 							placeholder="Search products..."
 							className="pl-9"
 							value={searchQuery}
-							onChange={handleSearchChange}
+							onChange={handleSearch}
 						/>
 					</div>
-					<Select value={selectedCategory} onValueChange={setSelectedCategory}>
+					<Select
+						value={selectedCategory || "all"}
+						onValueChange={handleCategoryChange}
+					>
 						<SelectTrigger className="w-full sm:w-48">
 							<SelectValue placeholder="All Categories" />
 						</SelectTrigger>
 						<SelectContent>
 							<SelectItem value="all">All Categories</SelectItem>
 							{categories.map((category) => (
-								<SelectItem key={category} value={category}>
-									{category}
+								<SelectItem key={category._id} value={category._id}>
+									{category.name}
 								</SelectItem>
 							))}
 						</SelectContent>
@@ -227,17 +236,17 @@ export default function ProductsPage() {
 				</div>
 			</div>
 
-			{filteredProducts.length === 0 ? (
+			{filteredAndSortedProducts.length === 0 ? (
 				<div className="text-center py-12">
 					<p className="text-muted-foreground">
-						{debouncedSearchQuery || selectedCategory !== "all"
+						{searchQuery || selectedCategory
 							? "No products match your filters."
 							: "No products available."}
 					</p>
 				</div>
 			) : (
 				<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-					{filteredProducts.map((product) => (
+					{filteredAndSortedProducts.map((product) => (
 						<Link key={product._id} href={`/products/${product._id}`}>
 							<Card className="h-full flex flex-col hover:shadow-lg transition-shadow">
 								<div className="relative aspect-square overflow-hidden">
@@ -289,28 +298,6 @@ export default function ProductsPage() {
 							</Card>
 						</Link>
 					))}
-				</div>
-			)}
-
-			{pagination.pages > 1 && (
-				<div className="flex justify-center mt-8 space-x-4">
-					<Button
-						onClick={() => fetchProducts(pagination.page - 1)}
-						disabled={pagination.page === 1 || loading}
-						variant="outline"
-					>
-						Previous
-					</Button>
-					<span className="flex items-center px-4">
-						Page {pagination.page} of {pagination.pages}
-					</span>
-					<Button
-						onClick={() => fetchProducts(pagination.page + 1)}
-						disabled={pagination.page === pagination.pages || loading}
-						variant="outline"
-					>
-						Next
-					</Button>
 				</div>
 			)}
 		</div>

@@ -24,6 +24,14 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
+import { useEffect, useState } from "react";
+
+// Define Category type
+interface Category {
+	_id: string;
+	name: string;
+	slug: string;
+}
 
 // Define form schema
 const formSchema = z.object({
@@ -36,11 +44,11 @@ const formSchema = z.object({
 	price: z.coerce.number().min(0.01, {
 		message: "Price must be greater than 0.",
 	}),
-	category: z.string({
-		required_error: "Please select a category.",
+	category: z.string().min(1, {
+		message: "Please select a category.",
 	}),
 	stock: z.coerce.number().int().min(0, {
-		message: "Stock must be a positive number.",
+		message: "Stock must be a non-negative integer.",
 	}),
 	imageUrl: z.string().url({
 		message: "Please enter a valid URL.",
@@ -87,6 +95,35 @@ export function ProductForm({
 	onSubmit,
 	isSubmitting = false,
 }: ProductFormProps) {
+	const [categories, setCategories] = useState<Category[]>([]);
+	const [isLoading, setIsLoading] = useState(false);
+
+	// Fetch categories on component mount
+	useEffect(() => {
+		const fetchCategories = async () => {
+			try {
+				setIsLoading(true);
+				const response = await fetch("/api/categories/active");
+				if (!response.ok) {
+					throw new Error("Failed to fetch categories");
+				}
+				const data = await response.json();
+				setCategories(data);
+			} catch (error) {
+				console.error("Error fetching categories:", error);
+				toast({
+					title: "Error",
+					description: "Failed to load categories. Please try again.",
+					// variant: "destructive",
+				});
+			} finally {
+				setIsLoading(false);
+			}
+		};
+
+		fetchCategories();
+	}, []);
+
 	const form = useForm<ProductFormValues>({
 		resolver: zodResolver(formSchema),
 		defaultValues: product || defaultValues,
@@ -149,7 +186,7 @@ export function ProductForm({
 									</FormControl>
 									<SelectContent>
 										{categories.map((category) => (
-											<SelectItem key={category.id} value={category.id}>
+											<SelectItem key={category._id} value={category._id}>
 												{category.name}
 											</SelectItem>
 										))}

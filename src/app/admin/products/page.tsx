@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
 	Card,
 	CardContent,
@@ -20,11 +20,37 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 
+interface Category {
+	_id: string;
+	name: string;
+	slug: string;
+}
+
+// Custom hook for debouncing
+const useDebounce = (value: string, delay: number) => {
+	const [debouncedValue, setDebouncedValue] = useState(value);
+
+	useEffect(() => {
+		const handler = setTimeout(() => {
+			setDebouncedValue(value);
+		}, delay);
+
+		return () => {
+			clearTimeout(handler);
+		};
+	}, [value, delay]);
+
+	return debouncedValue;
+};
+
 export default function AdminProductsPage() {
 	const [products, setProducts] = useState<IProduct[]>([]);
+	const [categories, setCategories] = useState<Category[]>([]);
+	const [selectedCategory, setSelectedCategory] = useState<string>("");
 	const [isLoading, setIsLoading] = useState(true);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
+	const debouncedSearchQuery = useDebounce(searchQuery, 500);
 	const [sortOption, setSortOption] = useState("newest");
 	const [error, setError] = useState<string | null>(null);
 	const [pagination, setPagination] = useState({
@@ -34,6 +60,25 @@ export default function AdminProductsPage() {
 		perPage: 9,
 	});
 	const isMounted = useRef(true);
+
+	// Fetch categories
+	const fetchCategories = useCallback(async () => {
+		try {
+			const response = await fetch("/api/categories/active");
+			if (!response.ok) {
+				throw new Error("Failed to fetch categories");
+			}
+			const data = await response.json();
+			setCategories(data);
+		} catch (error) {
+			console.error("Error fetching categories:", error);
+			toast({
+				title: "Error",
+				description: "Failed to load categories",
+				// variant: "destructive",
+			});
+		}
+	}, []);
 
 	// Fetch products with pagination
 	const fetchProducts = useCallback(
@@ -46,8 +91,12 @@ export default function AdminProductsPage() {
 				url.searchParams.set("page", page.toString());
 				url.searchParams.set("limit", "9");
 
-				if (searchQuery) {
-					url.searchParams.set("keyword", searchQuery);
+				if (debouncedSearchQuery) {
+					url.searchParams.set("keyword", debouncedSearchQuery);
+				}
+
+				if (selectedCategory) {
+					url.searchParams.set("category", selectedCategory);
 				}
 
 				console.log("Fetching products...", url.toString());
@@ -86,27 +135,31 @@ export default function AdminProductsPage() {
 				}
 			}
 		},
-		[searchQuery]
+		[debouncedSearchQuery, selectedCategory]
 	);
 
+	// Fetch products when debounced search query changes
 	useEffect(() => {
-		isMounted.current = true;
-		// Initial fetch with page 1
 		fetchProducts(1);
+	}, [debouncedSearchQuery, fetchProducts]);
 
-		// Cleanup function
-		return () => {
-			isMounted.current = false;
-		};
-	}, [fetchProducts]);
+	// Fetch categories on component mount
+	useEffect(() => {
+		fetchCategories();
+	}, [fetchCategories]);
+
+	// Handle search input change
+	const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		setSearchQuery(e.target.value);
+	};
 
 	// Filter and sort products
 	const filteredAndSortedProducts = useMemo(() => {
 		let result = [...products];
 
 		// Apply search
-		if (searchQuery) {
-			const query = searchQuery.toLowerCase();
+		if (debouncedSearchQuery) {
+			const query = debouncedSearchQuery.toLowerCase();
 			result = result.filter(
 				(product) =>
 					product.name.toLowerCase().includes(query) ||
@@ -146,7 +199,7 @@ export default function AdminProductsPage() {
 		}
 
 		return result;
-	}, [products, searchQuery, sortOption]);
+	}, [products, debouncedSearchQuery, sortOption]);
 
 	// Handle form submission
 	const handleSubmit = async (data: any) => {
@@ -246,25 +299,49 @@ export default function AdminProductsPage() {
 					<p className="text-muted-foreground">Manage your products</p>
 				</div>
 				<div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
-					<Input
-						placeholder="Search products..."
-						value={searchQuery}
-						onChange={(e) => setSearchQuery(e.target.value)}
-						className="w-full md:w-64"
-					/>
-					<Select value={sortOption} onValueChange={setSortOption}>
-						<SelectTrigger className="w-full md:w-48">
-							<SelectValue placeholder="Sort by" />
-						</SelectTrigger>
-						<SelectContent>
-							<SelectItem value="newest">Newest</SelectItem>
-							<SelectItem value="oldest">Oldest</SelectItem>
-							<SelectItem value="price-asc">Price: Low to High</SelectItem>
-							<SelectItem value="price-desc">Price: High to Low</SelectItem>
-							<SelectItem value="name-asc">Name: A to Z</SelectItem>
-							<SelectItem value="name-desc">Name: Z to A</SelectItem>
-						</SelectContent>
-					</Select>
+					<div className="flex gap-4 mb-6">
+						<div className="w-full max-w-xs">
+							<Select
+								value={selectedCategory}
+								onValueChange={(value) => {
+									setSelectedCategory(value === "all" ? "" : value);
+									setPagination((prev) => ({ ...prev, page: 1 }));
+								}}
+							>
+								<SelectTrigger>
+									<SelectValue placeholder="Filter by category" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="all">All Categories</SelectItem>
+									{categories.map((category) => (
+										<SelectItem key={category._id} value={category._id}>
+											{category.name}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
+						<Input
+							type="text"
+							placeholder="Search products..."
+							value={searchQuery}
+							onChange={handleSearchChange}
+							className="w-full md:w-64"
+						/>
+						<Select value={sortOption} onValueChange={setSortOption}>
+							<SelectTrigger className="w-full md:w-48">
+								<SelectValue placeholder="Sort by" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="newest">Newest</SelectItem>
+								<SelectItem value="oldest">Oldest</SelectItem>
+								<SelectItem value="price-asc">Price: Low to High</SelectItem>
+								<SelectItem value="price-desc">Price: High to Low</SelectItem>
+								<SelectItem value="name-asc">Name: A to Z</SelectItem>
+								<SelectItem value="name-desc">Name: Z to A</SelectItem>
+							</SelectContent>
+						</Select>
+					</div>
 				</div>
 			</div>
 
@@ -284,10 +361,12 @@ export default function AdminProductsPage() {
 									<CardTitle>All Products</CardTitle>
 									<CardDescription>
 										{filteredAndSortedProducts.length} products found
-										{searchQuery ? ` for "${searchQuery}"` : ""}
+										{debouncedSearchQuery
+											? ` for "${debouncedSearchQuery}"`
+											: ""}
 									</CardDescription>
 								</div>
-								{searchQuery && (
+								{debouncedSearchQuery && (
 									<Button
 										variant="ghost"
 										onClick={() => setSearchQuery("")}
@@ -306,7 +385,7 @@ export default function AdminProductsPage() {
 							) : filteredAndSortedProducts.length === 0 ? (
 								<div className="text-center py-12">
 									<p className="text-muted-foreground">
-										{searchQuery
+										{debouncedSearchQuery
 											? "No products match your search criteria."
 											: "No products found. Add your first product to get started!"}
 									</p>

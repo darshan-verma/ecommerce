@@ -4,6 +4,7 @@ export interface ICategory extends Document {
 	name: string;
 	description?: string;
 	slug: string;
+	image?: string;
 	isActive: boolean;
 	createdAt: Date;
 	updatedAt: Date;
@@ -22,6 +23,10 @@ const categorySchema = new Schema<ICategory>(
 			type: String,
 			trim: true,
 			maxlength: [500, "Description cannot exceed 500 characters"],
+		},
+		image: {
+			type: String,
+			trim: true,
 		},
 		slug: {
 			type: String,

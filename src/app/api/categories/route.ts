@@ -3,12 +3,34 @@ import { connectDB } from "@/lib/db";
 import Category from "@/models/Category";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { writeFile, mkdir } from "fs/promises";
+import { existsSync } from "fs";
+import path from "path";
+import { randomBytes } from "crypto";
+
+// Function to generate a random filename
+const generateUniqueFilename = (extension: string): string => {
+	return `${randomBytes(16).toString("hex")}${extension}`;
+};
+
+// Configure where to store uploaded files
+const uploadDir = path.join(process.cwd(), "public", "uploads", "categories");
+
+// Ensure upload directory exists
+const ensureUploadDir = async () => {
+	if (!existsSync(uploadDir)) {
+		await mkdir(uploadDir, { recursive: true });
+	}
+};
 
 // Connect to database
 await connectDB().catch((error) => {
 	console.error("Database connection error:", error);
 	throw new Error("Failed to connect to the database");
 });
+
+// Ensure uploads directory exists on server start
+ensureUploadDir().catch(console.error);
 
 // Get all categories
 // GET /api/categories
@@ -38,88 +60,112 @@ export async function GET() {
 // Create a new category
 // POST /api/categories
 export async function POST(request: Request) {
-	console.log("Category creation request received");
-
 	try {
 		// Check authentication
 		const session = await getServerSession(authOptions);
-		console.log(
-			"Session data:",
-			session ? "Authenticated" : "Not authenticated"
-		);
-
 		if (!session?.user) {
-			console.warn("Unauthorized access attempt");
 			return NextResponse.json(
 				{ success: false, message: "Unauthorized" },
 				{ status: 401 }
 			);
 		}
 
-		// Parse request body
-		let body;
-		try {
-			body = await request.json();
-			console.log("Request body:", body);
-		} catch (parseError) {
-			console.error("Error parsing request body:", parseError);
-			return NextResponse.json(
-				{ success: false, message: "Invalid request body" },
-				{ status: 400 }
-			);
-		}
+		// Ensure upload directory exists
+		await ensureUploadDir();
+
+		// Parse form data
+		const formData = await request.formData();
+		const name = formData.get("name") as string;
+		const description = formData.get("description") as string;
+		const imageFile = formData.get("image") as File | null;
 
 		// Validate required fields
-		if (!body.name || typeof body.name !== "string") {
-			console.warn("Invalid category name:", body.name);
+		if (!name) {
 			return NextResponse.json(
-				{
-					success: false,
-					message: "Category name is required and must be a string",
-				},
+				{ success: false, message: "Category name is required" },
 				{ status: 400 }
 			);
 		}
 
-		// Check if category already exists
-		console.log(`Checking if category '${body.name}' exists...`);
-		const existingCategory = await Category.findOne({ name: body.name.trim() });
-		if (existingCategory) {
-			console.warn(`Category '${body.name}' already exists`);
-			return NextResponse.json(
-				{ success: false, message: "Category already exists" },
-				{ status: 400 }
-			);
+		// Handle file upload if present
+		let imageUrl = "";
+		if (imageFile && imageFile.size > 0) {
+			try {
+				const fileExtension = path.extname(imageFile.name);
+				const fileName = generateUniqueFilename(fileExtension);
+				const filePath = path.join(uploadDir, fileName);
+
+				// Validate file type (optional)
+				const allowedTypes = [".jpg", ".jpeg", ".png", ".webp"];
+				if (!allowedTypes.includes(fileExtension.toLowerCase())) {
+					return NextResponse.json(
+						{
+							success: false,
+							message:
+								"Invalid file type. Only JPG, JPEG, PNG, and WEBP are allowed.",
+						},
+						{ status: 400 }
+					);
+				}
+
+				// Validate file size (e.g., 5MB max)
+				const maxSize = 5 * 1024 * 1024; // 5MB
+				if (imageFile.size > maxSize) {
+					return NextResponse.json(
+						{
+							success: false,
+							message: "File is too large. Maximum size is 5MB.",
+						},
+						{ status: 400 }
+					);
+				}
+
+				// Convert file to buffer and save
+				const bytes = await imageFile.arrayBuffer();
+				const buffer = Buffer.from(bytes);
+				await writeFile(filePath, buffer);
+
+				// Set the URL to be stored in the database
+				imageUrl = `/uploads/categories/${fileName}`;
+			} catch (error) {
+				console.error("Error saving file:", error);
+				return NextResponse.json(
+					{ success: false, message: "Error processing the uploaded file" },
+					{ status: 500 }
+				);
+			}
 		}
 
 		// Create new category
-		console.log("Creating new category...");
-		const categoryData = {
-			name: body.name.trim(),
-			description: body.description?.trim() || "",
-			slug: body.name.trim().toLowerCase().replace(/\s+/g, "-"),
+		const category = new Category({
+			name,
+			description: description || "",
+			image: imageUrl,
+			slug: name
+				.toLowerCase()
+				.replace(/\s+/g, "-")
+				.replace(/[^\w-]+/g, ""),
 			isActive: true,
-		};
+		});
 
-		console.log("Category data to save:", categoryData);
-		const category = await Category.create(categoryData);
-		console.log("Category created successfully:", category._id);
+		await category.save();
 
 		return NextResponse.json(
 			{
 				success: true,
-				message: "Category created successfully",
 				data: category,
+				message: "Category created successfully",
 			},
 			{ status: 201 }
 		);
 	} catch (error: any) {
-		console.error("Error in category creation:", error);
+		console.error("Error creating category:", error);
 		return NextResponse.json(
 			{
 				success: false,
-				message: error.message || "Error creating category",
-				stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
+				message: "Error creating category",
+				error:
+					process.env.NODE_ENV === "development" ? error.message : undefined,
 			},
 			{ status: 500 }
 		);

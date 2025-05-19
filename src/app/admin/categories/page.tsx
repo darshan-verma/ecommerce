@@ -11,11 +11,15 @@ interface Category {
 	description?: string;
 	isActive: boolean;
 	slug: string;
+	image?: string;
 }
 
 interface CategoryFormData {
+	_id?: string;
 	name: string;
 	description: string;
+	image?: File | null;
+	imagePreview?: string;
 }
 
 export default function AdminCategoriesPage() {
@@ -23,11 +27,15 @@ export default function AdminCategoriesPage() {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [isModalOpen, setIsModalOpen] = useState(false);
+	const [isEditing, setIsEditing] = useState(false);
 	const [isDeleting, setIsDeleting] = useState(false);
 	const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null);
 	const [formData, setFormData] = useState<CategoryFormData>({
+		_id: "",
 		name: "",
 		description: "",
+		image: null,
+		imagePreview: "",
 	});
 	const [formErrors, setFormErrors] = useState<Partial<CategoryFormData>>({});
 	const [isSubmitting, setIsSubmitting] = useState(false);
@@ -75,6 +83,50 @@ export default function AdminCategoriesPage() {
 		}
 	};
 
+	const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		if (e.target.files && e.target.files[0]) {
+			const file = e.target.files[0];
+			setFormData((prev) => ({
+				...prev,
+				image: file,
+				imagePreview: URL.createObjectURL(file),
+			}));
+		}
+	};
+
+	const handleEdit = (category: Category) => {
+		setFormData({
+			_id: category._id,
+			name: category.name,
+			description: category.description || "",
+			image: null,
+			imagePreview: category.image || "",
+		});
+		setIsEditing(true);
+		setIsModalOpen(true);
+	};
+
+	const handleDelete = async (id: string) => {
+		if (window.confirm("Are you sure you want to delete this category?")) {
+			try {
+				const response = await fetch(`/api/categories/${id}`, {
+					method: "DELETE",
+				});
+				const data = await response.json();
+
+				if (!response.ok) {
+					throw new Error(data.message || "Failed to delete category");
+				}
+
+				toast.success("Category deleted successfully");
+				fetchCategories();
+			} catch (err: any) {
+				console.error("Error deleting category:", err);
+				toast.error(err.message || "Failed to delete category");
+			}
+		}
+	};
+
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 
@@ -82,12 +134,6 @@ export default function AdminCategoriesPage() {
 		const errors: Partial<CategoryFormData> = {};
 		if (!formData.name.trim()) {
 			errors.name = "Category name is required";
-		} else if (formData.name.trim().length > 100) {
-			errors.name = "Category name cannot exceed 100 characters";
-		}
-
-		if (formData.description && formData.description.length > 500) {
-			errors.description = "Description cannot exceed 500 characters";
 		}
 
 		if (Object.keys(errors).length > 0) {
@@ -97,61 +143,68 @@ export default function AdminCategoriesPage() {
 
 		try {
 			setIsSubmitting(true);
-			const response = await fetch("/api/categories", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({
-					name: formData.name.trim(),
-					description: formData.description.trim(),
-				}),
+			const formDataToSend = new FormData();
+			formDataToSend.append("name", formData.name.trim());
+			formDataToSend.append("description", formData.description.trim());
+
+			if (formData.image) {
+				formDataToSend.append("image", formData.image);
+			}
+
+			const url =
+				isEditing && formData._id
+					? `/api/categories/${formData._id}`
+					: "/api/categories";
+
+			const method = isEditing ? "PUT" : "POST";
+
+			const response = await fetch(url, {
+				method,
+				body: formDataToSend,
 			});
 
 			const data = await response.json();
 
 			if (!response.ok) {
-				throw new Error(data.message || "Failed to create category");
+				throw new Error(data.message || "Failed to save category");
 			}
 
-			toast.success("Category created successfully");
-			setFormData({ name: "", description: "" });
+			toast.success(
+				isEditing
+					? "Category updated successfully"
+					: "Category created successfully"
+			);
+
+			// Reset form and close modal
+			setFormData({
+				_id: "",
+				name: "",
+				description: "",
+				image: null,
+				imagePreview: "",
+			});
+			setIsEditing(false);
 			setIsModalOpen(false);
 			fetchCategories();
 		} catch (err: any) {
-			toast.error(err.message || "Failed to create category");
+			console.error("Error saving category:", err);
+			toast.error(err.message || "Failed to save category");
 		} finally {
 			setIsSubmitting(false);
 		}
 	};
 
-	const handleDeleteClick = (id: string) => {
-		setCategoryToDelete(id);
-		setIsDeleting(true);
-	};
-
-	const confirmDelete = async () => {
-		if (!categoryToDelete) return;
-
-		try {
-			const response = await fetch(`/api/categories/${categoryToDelete}`, {
-				method: "DELETE",
-			});
-
-			const data = await response.json();
-
-			if (!response.ok) {
-				throw new Error(data.message || "Failed to delete category");
-			}
-
-			toast.success("Category deleted successfully");
-			fetchCategories();
-		} catch (err: any) {
-			toast.error(err.message || "Failed to delete category");
-		} finally {
-			setIsDeleting(false);
-			setCategoryToDelete(null);
-		}
+	const handleCloseModal = () => {
+		setFormData({
+			_id: "",
+			name: "",
+			description: "",
+			image: null,
+			imagePreview: "",
+		});
+		setIsEditing(false);
+		setIsModalOpen(false);
+		setFormErrors({});
 	};
 
 	if (loading) {
@@ -228,16 +281,68 @@ export default function AdminCategoriesPage() {
 								</tr>
 							) : (
 								categories.map((category) => (
-									<tr key={category._id}>
+									<tr key={category._id} className="hover:bg-gray-50">
 										<td className="px-6 py-4 whitespace-nowrap">
-											<div className="text-sm font-medium text-gray-900">
-												{category.name}
-											</div>
-											<div className="text-sm text-gray-500">
-												/{category.slug}
+											<div className="flex items-center">
+												{category.image ? (
+													<div className="flex-shrink-0 h-10 w-10">
+														{(() => {
+															console.log("Category image debug:", {
+																categoryName: category.name,
+																originalPath: category.image,
+																extractedFilename: category.image
+																	.split("/")
+																	.pop(),
+																constructedPath: `/uploads/categories/${category.image
+																	.split("/")
+																	.pop()}`,
+															});
+															return null;
+														})()}
+														<div className="h-10 w-10 rounded-full overflow-hidden bg-gray-100">
+															<img
+																className="h-full w-full object-cover"
+																src={`/uploads/categories/${category.image
+																	.split("/")
+																	.pop()}`}
+																alt={category.name}
+																onError={(e) => {
+																	console.error("Image load error:", {
+																		error: "Failed to load image",
+																		src: e.currentTarget.src,
+																		category: category.name,
+																		fullPath:
+																			window.location.origin +
+																			e.currentTarget.src,
+																	});
+																	e.currentTarget.onerror = null;
+																	e.currentTarget.src =
+																		"/placeholder-category.png";
+																}}
+																onLoad={() =>
+																	console.log(
+																		"Image loaded successfully:",
+																		category.name
+																	)
+																}
+															/>
+														</div>
+													</div>
+												) : (
+													<div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+														<span className="text-gray-500 text-xs">
+															No Image
+														</span>
+													</div>
+												)}
+												<div className={`ml-${category.image ? "4" : "0"}`}>
+													<div className="text-sm font-medium text-gray-900">
+														{category.name}
+													</div>
+												</div>
 											</div>
 										</td>
-										<td className="px-6 py-4">
+										<td className="px-6 py-4 whitespace-normal">
 											<div className="text-sm text-gray-900">
 												{category.description || "No description"}
 											</div>
@@ -255,15 +360,13 @@ export default function AdminCategoriesPage() {
 										</td>
 										<td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
 											<button
-												onClick={() =>
-													router.push(`/admin/categories/${category._id}`)
-												}
-												className="text-blue-600 hover:text-blue-900 mr-4"
+												onClick={() => handleEdit(category)}
+												className="text-indigo-600 hover:text-indigo-900 mr-4"
 											>
 												<FiEdit2 className="h-5 w-5" />
 											</button>
 											<button
-												onClick={() => handleDeleteClick(category._id)}
+												onClick={() => handleDelete(category._id)}
 												className="text-red-600 hover:text-red-900"
 											>
 												<FiTrash2 className="h-5 w-5" />
@@ -281,15 +384,17 @@ export default function AdminCategoriesPage() {
 				<div className="fixed inset-0 z-50 flex items-center justify-center p-4">
 					<div
 						className="fixed inset-0 bg-black/30 backdrop-blur-sm"
-						onClick={() => !isSubmitting && setIsModalOpen(false)}
+						onClick={() => !isSubmitting && handleCloseModal()}
 					/>
 					<div className="relative w-full max-w-md bg-white rounded-lg shadow-xl">
 						<div className="p-6">
 							<div className="flex justify-between items-center mb-4">
-								<h2 className="text-xl font-semibold">Add New Category</h2>
+								<h2 className="text-xl font-semibold">
+									{isEditing ? "Edit Category" : "Add New Category"}
+								</h2>
 								<button
 									type="button"
-									onClick={() => !isSubmitting && setIsModalOpen(false)}
+									onClick={() => !isSubmitting && handleCloseModal()}
 									className="text-gray-500 hover:text-gray-700"
 									disabled={isSubmitting}
 								>
@@ -349,10 +454,51 @@ export default function AdminCategoriesPage() {
 										</p>
 									)}
 								</div>
+								<div className="space-y-4">
+									<div>
+										<label
+											htmlFor="image"
+											className="block text-sm font-medium text-gray-700 mb-1"
+										>
+											Category Image
+										</label>
+										<div className="mt-1 flex items-center">
+											<label
+												htmlFor="image-upload"
+												className="cursor-pointer bg-white py-2 px-3 border border-gray-300 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+											>
+												Choose File
+											</label>
+											<input
+												id="image-upload"
+												name="image"
+												type="file"
+												accept="image/*"
+												onChange={handleImageChange}
+												className="sr-only"
+												disabled={isSubmitting}
+											/>
+											{formData.image && (
+												<span className="ml-2 text-sm text-gray-500">
+													{formData.image.name}
+												</span>
+											)}
+										</div>
+										{formData.imagePreview && (
+											<div className="mt-2">
+												<img
+													src={formData.imagePreview}
+													alt="Preview"
+													className="h-32 w-32 object-cover rounded-md"
+												/>
+											</div>
+										)}
+									</div>
+								</div>
 								<div className="flex justify-end space-x-3 pt-2">
 									<button
 										type="button"
-										onClick={() => !isSubmitting && setIsModalOpen(false)}
+										onClick={() => !isSubmitting && handleCloseModal()}
 										className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
 										disabled={isSubmitting}
 									>
@@ -387,6 +533,8 @@ export default function AdminCategoriesPage() {
 												</svg>
 												Saving...
 											</span>
+										) : isEditing ? (
+											"Update Category"
 										) : (
 											"Save Category"
 										)}
@@ -436,18 +584,11 @@ export default function AdminCategoriesPage() {
 							<div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
 								<button
 									type="button"
-									onClick={confirmDelete}
-									className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm"
-								>
-									Delete
-								</button>
-								<button
-									type="button"
 									onClick={() => {
 										setIsDeleting(false);
 										setCategoryToDelete(null);
 									}}
-									className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+									className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm"
 								>
 									Cancel
 								</button>
