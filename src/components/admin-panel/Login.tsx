@@ -44,7 +44,7 @@ const Login = () => {
 				throw new Error(result.error);
 			}
 
-			router.push("/admin/dashboard");
+			router.push("/admin/analytics");
 		} catch (error) {
 			toast({
 				title: "Authentication Failed",
@@ -59,7 +59,7 @@ const Login = () => {
 	const handleGoogleSignIn = async () => {
 		setIsLoading(true);
 		try {
-			await signIn("google", { callbackUrl: "/admin/dashboard" });
+			await signIn("google", { callbackUrl: "/admin/analytics" });
 		} catch (error) {
 			toast({
 				title: "Error",

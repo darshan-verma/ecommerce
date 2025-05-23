@@ -38,7 +38,8 @@ export default function ProductsPage() {
 	const router = useRouter();
 	const searchParams = useSearchParams();
 
-	const [products, setProducts] = useState<Product[]>([]);
+	const [allProducts, setAllProducts] = useState<Product[]>([]);
+	const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
 	const [categories, setCategories] = useState<Category[]>([]);
 	const [selectedCategory, setSelectedCategory] = useState<string>(
 		searchParams.get("category") || ""
@@ -50,78 +51,51 @@ export default function ProductsPage() {
 	const [error, setError] = useState<string | null>(null);
 	const [sortOption, setSortOption] = useState("newest");
 
-	const updateUrl = useCallback(
-		(updates: { category?: string; keyword?: string }) => {
-			const params = new URLSearchParams(searchParams);
-
-			if (updates.category !== undefined) {
-				if (updates.category) {
-					params.set("category", updates.category);
-				} else {
-					params.delete("category");
-				}
-			}
-
-			if (updates.keyword !== undefined) {
-				if (updates.keyword) {
-					params.set("keyword", updates.keyword);
-				} else {
-					params.delete("keyword");
-				}
-			}
-
-			// Update URL without page reload
-			router.push(`?${params.toString()}`, { scroll: false });
-		},
-		[router, searchParams]
-	);
-
-	const handleCategoryChange = useCallback(
-		(value: string) => {
-			const newCategory = value === "all" ? "" : value;
-			setSelectedCategory(newCategory);
-			updateUrl({ category: newCategory });
-		},
-		[updateUrl]
-	);
-
-	const handleSearch = useCallback(
-		(e: React.ChangeEvent<HTMLInputElement>) => {
-			const value = e.target.value;
-			setSearchQuery(value);
-
-			// Debounce search updates
-			const timer = setTimeout(() => {
-				updateUrl({ keyword: value });
-			}, 500);
-
-			return () => clearTimeout(timer);
-		},
-		[updateUrl]
-	);
-
+	// Fetch all products on component mount
 	const fetchProducts = useCallback(async () => {
 		try {
 			setIsLoading(true);
 			setError(null);
 
-			const params = new URLSearchParams();
-			if (searchQuery) params.set("keyword", searchQuery);
-			if (selectedCategory) params.set("category", selectedCategory);
-
-			const response = await fetch(`/api/products?${params.toString()}`);
+			const response = await fetch("/api/products");
 			if (!response.ok) throw new Error("Failed to fetch products");
 
 			const data = await response.json();
-			setProducts(data.products || []);
+			setAllProducts(data.products || []);
+			setFilteredProducts(data.products || []);
 		} catch (error) {
 			console.error("Error fetching products:", error);
 			setError("Failed to load products. Please try again later.");
 		} finally {
 			setIsLoading(false);
 		}
-	}, [searchQuery, selectedCategory]);
+	}, []);
 
+	// Filter products based on search query and category
+	useEffect(() => {
+		let result = [...allProducts];
+
+		// Apply search filter
+		if (searchQuery) {
+			const query = searchQuery.toLowerCase();
+			result = result.filter(
+				(product) =>
+					product.name.toLowerCase().includes(query) ||
+					product.description.toLowerCase().includes(query)
+			);
+		}
+
+		// Apply category filter
+		if (selectedCategory) {
+			result = result.filter(
+				(product) => product.category === selectedCategory
+			);
+		}
+
+		setFilteredProducts(result);
+	}, [allProducts, searchQuery, selectedCategory]);
+
+	// Fetch categories
 	const fetchCategories = useCallback(async () => {
 		try {
 			const response = await fetch("/api/categories/active");
@@ -139,8 +113,21 @@ export default function ProductsPage() {
 		fetchProducts();
 	}, [fetchCategories, fetchProducts]);
 
-	const filteredAndSortedProducts = useMemo(() => {
-		let result = [...products];
+	// Handle search input
+	const handleSearch = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+		const value = e.target.value;
+		setSearchQuery(value);
+	}, []);
+
+	// Handle category change
+	const handleCategoryChange = useCallback((value: string) => {
+		const newCategory = value === "all" ? "" : value;
+		setSelectedCategory(newCategory);
+	}, []);
+
+	// Sort products
+	const sortedProducts = useMemo(() => {
+		let result = [...filteredProducts];
 
 		switch (sortOption) {
 			case "price-asc":
@@ -166,7 +153,7 @@ export default function ProductsPage() {
 		}
 
 		return result;
-	}, [products, sortOption]);
+	}, [filteredProducts, sortOption]);
 
 	if (isLoading) {
 		return (
@@ -188,7 +175,7 @@ export default function ProductsPage() {
 				<div>
 					<h1 className="text-3xl font-bold">Our Products</h1>
 					<p className="text-muted-foreground">
-						{filteredAndSortedProducts.length} products found
+						{sortedProducts.length} products found
 						{searchQuery ? ` for "${searchQuery}"` : ""}
 					</p>
 				</div>
@@ -236,7 +223,7 @@ export default function ProductsPage() {
 				</div>
 			</div>
 
-			{filteredAndSortedProducts.length === 0 ? (
+			{sortedProducts.length === 0 ? (
 				<div className="text-center py-12">
 					<p className="text-muted-foreground">
 						{searchQuery || selectedCategory
@@ -246,7 +233,7 @@ export default function ProductsPage() {
 				</div>
 			) : (
 				<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-					{filteredAndSortedProducts.map((product) => (
+					{sortedProducts.map((product) => (
 						<Link key={product._id} href={`/products/${product._id}`}>
 							<Card className="h-full flex flex-col hover:shadow-lg transition-shadow">
 								<div className="relative aspect-square overflow-hidden">

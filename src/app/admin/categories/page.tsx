@@ -221,7 +221,7 @@ export default function AdminCategoriesPage() {
 				<h1 className="text-2xl font-bold text-gray-800">Manage Categories</h1>
 				<button
 					onClick={() => setIsModalOpen(true)}
-					className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+					className="flex items-center px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800 transition-colors"
 				>
 					<FiPlus className="mr-2" />
 					Add Category

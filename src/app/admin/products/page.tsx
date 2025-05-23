@@ -63,6 +63,7 @@ type ProductData = {
 	}>;
 	createdAt: string;
 	updatedAt: string;
+	imageUrl: string;
 };
 
 // Custom hook for debouncing
@@ -127,64 +128,74 @@ export default function AdminProductsPage() {
 
 	// Fetch products with pagination
 	const fetchProducts = useCallback(
-		async (page = 1) => {
+		async (pageNumber: number) => {
 			try {
 				setIsLoading(true);
 				setError(null);
 
-				const url = new URL("/api/products", window.location.origin);
-				url.searchParams.set("page", page.toString());
-				url.searchParams.set("limit", "10");
-
-				if (debouncedSearchQuery) {
-					url.searchParams.set("keyword", debouncedSearchQuery);
-				}
-
-				// Only add category filter if it's selected
-				if (selectedCategory && selectedCategory !== "all") {
-					console.log("Adding category filter to API call:", selectedCategory);
-					url.searchParams.set("category", selectedCategory);
-				} else {
-					console.log("No category filter or 'all' selected");
-				}
-
-				console.log("Fetching products from:", url.toString());
-				const response = await fetch(url.toString(), {
-					cache: "no-store",
-					headers: {
-						"Content-Type": "application/json",
-					},
+				// Build the query parameters
+				const params = new URLSearchParams({
+					page: pageNumber.toString(),
+					limit: "10",
 				});
 
+				// Add category filter if selected
+				if (selectedCategory && selectedCategory !== "all") {
+					params.append("category", selectedCategory);
+				}
+
+				// Add search term if provided
+				if (debouncedSearchQuery) {
+					params.append("keyword", debouncedSearchQuery);
+				}
+
+				const apiUrl = `/api/products?${params.toString()}`;
+				console.log("Fetching products from:", apiUrl);
+
+				const response = await fetch(apiUrl);
+
 				if (!response.ok) {
-					throw new Error(`HTTP error! status: ${response.status}`);
+					const errorText = await response.text();
+					console.error("API Error Response:", {
+						status: response.status,
+						statusText: response.statusText,
+						headers: Object.fromEntries(response.headers.entries()),
+						body: errorText,
+					});
+					throw new Error(
+						`Failed to fetch products: ${response.status} ${response.statusText}`
+					);
 				}
 
 				const data = await response.json();
-				console.log("API Response data:", data);
+				console.log("API Response Data:", data);
 
-				// Only update state if component is still mounted
-				if (isMounted.current) {
-					setProducts(data.products || []);
-					setPagination({
-						page: data.page || 1,
-						pages: data.pages || 1,
-						total: data.total || 0,
-						limit: 10,
-					});
+				if (!data.products) {
+					console.error("Unexpected API response format:", data);
+					throw new Error("Invalid response format from server");
 				}
-			} catch (error) {
-				console.error("Error fetching products:", error);
-				if (isMounted.current) {
-					setError("Failed to load products. Please try again later.");
-				}
+
+				setProducts(data.products);
+
+				// Update pagination state to match API response
+				setPagination({
+					page: data.page || 1,
+					pages: data.totalPages || 1,
+					total: data.totalProducts || 0,
+					limit: 10,
+				});
+			} catch (err) {
+				console.error("Error in fetchProducts:", {
+					error: err,
+					message: err instanceof Error ? err.message : "Unknown error",
+					stack: err instanceof Error ? err.stack : undefined,
+				});
+				setError("Failed to load products. Please try again.");
 			} finally {
-				if (isMounted.current) {
-					setIsLoading(false);
-				}
+				setIsLoading(false);
 			}
 		},
-		[debouncedSearchQuery, selectedCategory]
+		[selectedCategory, debouncedSearchQuery]
 	);
 
 	// Fetch products when debounced search query changes
@@ -243,6 +254,7 @@ export default function AdminProductsPage() {
 	// Handle form submission
 	const handleSubmit = async (data: any) => {
 		try {
+			setIsSubmitting(true);
 			const response = await fetch("/api/products", {
 				method: "POST",
 				headers: {
@@ -263,13 +275,9 @@ export default function AdminProductsPage() {
 				throw new Error("Failed to create product");
 			}
 
-			const newProduct = await response.json();
-
-			// Add the new product to the products array
-			setProducts((prevProducts) => [...prevProducts, newProduct]);
-
-			// Switch to the products list tab
+			// Switch to the products list tab and refresh the data
 			setActiveTab("list");
+			await fetchProducts(1);
 
 			toast({
 				title: "Success",
@@ -283,6 +291,56 @@ export default function AdminProductsPage() {
 				// variant: "destructive",
 			});
 			throw error;
+		} finally {
+			setIsSubmitting(false);
+		}
+	};
+
+	// Handle update product
+	const handleUpdateProduct = async (data: any) => {
+		try {
+			setIsSubmitting(true);
+			const response = await fetch(`/api/products/${editingProduct?._id}`, {
+				method: "PUT",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					...data,
+					images: [
+						{
+							public_id:
+								editingProduct?.images?.[0]?.public_id ||
+								`product_${Date.now()}`,
+							url: data.imageUrl,
+						},
+					],
+				}),
+			});
+
+			if (!response.ok) {
+				throw new Error("Failed to update product");
+			}
+
+			// Switch to the products list tab and refresh the data
+			setActiveTab("list");
+			await fetchProducts(pagination.page);
+
+			toast({
+				title: "Success",
+				description: "Product updated successfully",
+			});
+
+			setEditingProduct(null);
+		} catch (error) {
+			console.error("Error updating product:", error);
+			toast({
+				title: "Error",
+				description: "Failed to update product",
+				// variant: "destructive",
+			});
+		} finally {
+			setIsSubmitting(false);
 		}
 	};
 
@@ -336,6 +394,9 @@ export default function AdminProductsPage() {
 			return category._id?.toString() || "";
 		};
 
+		// Get the first image URL if available
+		const firstImageUrl = product.images?.[0]?.url || "";
+
 		// Create a plain object with the product data
 		const productData: ProductData = {
 			_id: product._id?.toString() || "",
@@ -361,6 +422,8 @@ export default function AdminProductsPage() {
 				: [],
 			createdAt: product.createdAt?.toString() || new Date().toISOString(),
 			updatedAt: product.updatedAt?.toString() || new Date().toISOString(),
+			// Add the imageUrl field that the form expects
+			imageUrl: firstImageUrl,
 		};
 
 		setEditingProduct(productData);
@@ -369,56 +432,6 @@ export default function AdminProductsPage() {
 
 	const handleCancelEdit = () => {
 		setEditingProduct(null);
-	};
-
-	const handleUpdateProduct = async (data: any) => {
-		if (!editingProduct) return;
-
-		try {
-			setIsSubmitting(true);
-			const response = await fetch(`/api/products/${editingProduct._id}`, {
-				method: "PUT",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({
-					...data,
-					images: [
-						{
-							public_id: data.images?.[0]?.public_id || `product_${Date.now()}`,
-							url: data.imageUrl,
-						},
-					],
-				}),
-			});
-
-			if (!response.ok) {
-				throw new Error("Failed to update product");
-			}
-
-			const updatedProduct = await response.json();
-
-			// Update the product in the local state
-			setProducts(
-				products.map((p) => (p._id === updatedProduct._id ? updatedProduct : p))
-			);
-
-			setEditingProduct(null);
-			toast({
-				title: "Success",
-				description: "Product updated successfully",
-			});
-		} catch (error) {
-			console.error("Error updating product:", error);
-			toast({
-				title: "Error",
-				description: "Failed to update product",
-				// variant: "destructive",
-			});
-			throw error;
-		} finally {
-			setIsSubmitting(false);
-		}
 	};
 
 	if (isLoading) {
@@ -670,7 +683,7 @@ export default function AdminProductsPage() {
 						</CardHeader>
 						<CardContent>
 							<ProductForm
-								// product={editingProduct || undefined}
+								product={editingProduct || undefined}
 								onSubmit={editingProduct ? handleUpdateProduct : handleSubmit}
 								onCancel={editingProduct ? handleCancelEdit : undefined}
 								isSubmitting={isSubmitting}
@@ -680,7 +693,7 @@ export default function AdminProductsPage() {
 				</TabsContent>
 			</Tabs>
 
-			{pagination.pages > 1 && (
+			{activeTab === "list" && pagination.pages > 1 && (
 				<div className="flex justify-center mt-8 gap-4">
 					<Button
 						onClick={() => fetchProducts(pagination.page - 1)}

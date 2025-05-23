@@ -183,119 +183,137 @@ export function ProductForm({
 				onSubmit={form.handleSubmit(handleFormSubmit)}
 				className="space-y-6"
 			>
-				<div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-					<FormField
-						control={form.control}
-						name="name"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>Product Name</FormLabel>
-								<FormControl>
-									<Input placeholder="Enter product name" {...field} />
-								</FormControl>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
-
-					<FormField
-						control={form.control}
-						name="category"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>Category</FormLabel>
-								<Select
-									onValueChange={field.onChange}
-									defaultValue={field.value}
-								>
+				<div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+					{/* Left Column - Image Preview */}
+					<div className="md:col-span-1">
+						<FormField
+							control={form.control}
+							name="imageUrl"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>Product Image</FormLabel>
 									<FormControl>
-										<SelectTrigger>
-											<SelectValue placeholder="Select a category" />
-										</SelectTrigger>
+										<div className="space-y-3">
+											{field.value ? (
+												<div className="w-full aspect-square border rounded-md overflow-hidden bg-gray-50">
+													<img
+														src={field.value}
+														alt="Product preview"
+														className="w-full h-full object-contain p-2"
+														onError={(e) => {
+															e.currentTarget.style.display = "none";
+														}}
+													/>
+												</div>
+											) : (
+												<div className="w-full aspect-square border-2 border-dashed rounded-md bg-gray-50 flex items-center justify-center text-gray-400">
+													{/* ImageIcon className="w-12 h-12" /> */}
+												</div>
+											)}
+											<Input placeholder="Image URL" {...field} />
+										</div>
 									</FormControl>
-									<SelectContent>
-										{categories.map((category) => (
-											<SelectItem key={category._id} value={category._id}>
-												{category.name}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+					</div>
 
-					<FormField
-						control={form.control}
-						name="price"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>Price ($)</FormLabel>
-								<FormControl>
-									<Input
-										type="number"
-										step="0.01"
-										placeholder="0.00"
-										{...field}
-									/>
-								</FormControl>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
+					{/* Right Column - Form Fields */}
+					<div className="md:col-span-3 space-y-4">
+						<FormField
+							control={form.control}
+							name="name"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>Product Name</FormLabel>
+									<FormControl>
+										<Input placeholder="Enter product name" {...field} />
+									</FormControl>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
 
-					<FormField
-						control={form.control}
-						name="stock"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>Stock</FormLabel>
-								<FormControl>
-									<Input type="number" placeholder="0" {...field} />
-								</FormControl>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
+						<FormField
+							control={form.control}
+							name="category"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>Category</FormLabel>
+									<Select
+										onValueChange={field.onChange}
+										defaultValue={field.value}
+									>
+										<FormControl>
+											<SelectTrigger>
+												<SelectValue placeholder="Select a category" />
+											</SelectTrigger>
+										</FormControl>
+										<SelectContent>
+											{categories.map((category) => (
+												<SelectItem key={category._id} value={category._id}>
+													{category.name}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
 
-					<FormField
-						control={form.control}
-						name="imageUrl"
-						render={({ field }) => (
-							<FormItem className="md:col-span-2">
-								<FormLabel>Image URL</FormLabel>
-								<FormControl>
-									<Input
-										placeholder="https://example.com/image.jpg"
-										{...field}
-									/>
-								</FormControl>
-								<FormDescription>
-									Enter the URL of the product image
-								</FormDescription>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
+						<FormField
+							control={form.control}
+							name="price"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>Price ($)</FormLabel>
+									<FormControl>
+										<Input
+											type="number"
+											step="0.01"
+											placeholder="0.00"
+											{...field}
+										/>
+									</FormControl>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
 
-					<FormField
-						control={form.control}
-						name="description"
-						render={({ field }) => (
-							<FormItem className="md:col-span-2">
-								<FormLabel>Description</FormLabel>
-								<FormControl>
-									<Textarea
-										placeholder="Enter product description"
-										className="min-h-[120px]"
-										{...field}
-									/>
-								</FormControl>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
+						<FormField
+							control={form.control}
+							name="stock"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>Stock</FormLabel>
+									<FormControl>
+										<Input type="number" placeholder="0" {...field} />
+									</FormControl>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+
+						<FormField
+							control={form.control}
+							name="description"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>Description</FormLabel>
+									<FormControl>
+										<Textarea
+											placeholder="Enter product description"
+											className="min-h-[120px]"
+											{...field}
+										/>
+									</FormControl>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+					</div>
 				</div>
 
 				<div className="flex justify-end space-x-4">
