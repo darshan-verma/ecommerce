@@ -1,10 +1,14 @@
 "use client";
+
 import React from "react";
 import {
 	MdDashboard,
 	MdManageAccounts,
 	MdCategory,
 	MdOutlineInventory2,
+	MdMenu,
+	MdChevronLeft,
+	MdChevronRight,
 } from "react-icons/md";
 import { GrTransaction } from "react-icons/gr";
 import { IoAnalytics, IoSettings, IoLogOutOutline } from "react-icons/io5";
@@ -14,13 +18,10 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
+import { useSidebar } from "@/context/SidebarContext";
+import { Button } from "@/components/ui/button";
 
 const menus = [
-	// {
-	//   title: "Dashboard",
-	//   icon: <MdDashboard className="w-5 h-5" />,
-	//   href: "/admin/dashboard",
-	// },
 	{
 		title: "Analytics",
 		icon: <IoAnalytics className="w-5 h-5" />,
@@ -64,100 +65,147 @@ const settingsMenu = [
 const Sidebar = () => {
 	const pathname = usePathname();
 	const router = useRouter();
+	const { isCollapsed, toggleSidebar } = useSidebar();
 
 	const handleSignOut = async () => {
 		try {
-			// Sign out and redirect to login page
 			await signOut({
 				redirect: true,
 				callbackUrl: "/admin/analytics",
 			});
 		} catch (error) {
 			console.error("Error during sign out:", error);
-			// If there's an error, force redirect to admin login
 			window.location.href = "/admin/analytics";
 		}
 	};
 
 	return (
-		<div className="hidden md:flex flex-col w-64 h-screen px-4 py-8 bg-white border-r dark:bg-gray-900 dark:border-gray-700 fixed left-0 top-0 overflow-y-auto">
-			<div className="flex items-center gap-3 px-4 mb-8">
-				<img className="w-10 h-10 rounded-lg" src="/favicon.ico" alt="logo" />
-				<h2 className="text-xl font-semibold text-gray-800 dark:text-white">
-					Admin Panel
-				</h2>
+		<>
+			{/* Mobile sidebar toggle */}
+			<div className="md:hidden fixed top-4 left-4 z-50">
+				<Button
+					variant="outline"
+					size="icon"
+					onClick={toggleSidebar}
+					className="bg-white"
+				>
+					<MdMenu className="h-5 w-5" />
+				</Button>
 			</div>
 
-			<div className="flex flex-col justify-between flex-1 mt-6">
-				<nav className="space-y-1">
-					<div className="px-4 mb-4 text-xs font-semibold tracking-wider text-gray-500 uppercase">
-						Main
-					</div>
-					{menus.map((item, idx) => {
-						const isActive = pathname === item.href;
-						return (
-							<Link
-								key={idx}
-								href={item.href}
-								className={cn(
-									"flex items-center px-4 py-3 text-gray-600 transition-colors duration-200 transform rounded-lg dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800",
-									isActive &&
-										"bg-gray-100 dark:bg-gray-800 text-blue-600 dark:text-blue-400"
-								)}
-							>
-								<span className="mr-3">{item.icon}</span>
-								<span className="text-sm font-medium">{item.title}</span>
-							</Link>
-						);
-					})}
+			{/* Overlay for mobile */}
+			<div
+				className={cn(
+					"fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity duration-300",
+					isCollapsed ? "opacity-0 pointer-events-none" : "opacity-100"
+				)}
+				onClick={toggleSidebar}
+			/>
 
-					<div className="pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
-						<div className="px-4 mb-4 text-xs font-semibold tracking-wider text-gray-500 uppercase">
-							Settings
+			{/* Sidebar */}
+			<aside
+				className={cn(
+					"fixed top-0 left-0 h-screen bg-white border-r dark:bg-gray-900 dark:border-gray-700 z-50",
+					"transition-all duration-300 ease-in-out overflow-hidden",
+					isCollapsed ? "w-20" : "w-64"
+				)}
+			>
+				<div className="flex flex-col h-full">
+					{/* Logo and Toggle */}
+					<div className="flex items-center justify-between p-4 border-b">
+						{!isCollapsed && (
+							<div className="flex items-center gap-3">
+								<img
+									className="w-10 h-10 rounded-lg"
+									src="/favicon.ico"
+									alt="logo"
+								/>
+								<h2 className="text-xl font-semibold text-gray-800 dark:text-white">
+									Admin
+								</h2>
+							</div>
+						)}
+						<Button
+							variant="ghost"
+							size="icon"
+							onClick={toggleSidebar}
+							className="ml-auto"
+						>
+							{isCollapsed ? (
+								<MdChevronRight className="h-5 w-5" />
+							) : (
+								<MdChevronLeft className="h-5 w-5" />
+							)}
+							<span className="sr-only">Toggle sidebar</span>
+						</Button>
+					</div>
+
+					{/* Navigation */}
+					<nav className="flex-1 overflow-y-auto py-4">
+						<div className="space-y-1 px-2">
+							{menus.map((item, idx) => {
+								const isActive = pathname === item.href;
+								return (
+									<Link
+										key={idx}
+										href={item.href}
+										className={cn(
+											"flex items-center px-3 py-3 text-sm font-medium rounded-md transition-colors",
+											isActive
+												? "bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+												: "text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+										)}
+									>
+										<span className="flex-shrink-0">{item.icon}</span>
+										{!isCollapsed && <span className="ml-3">{item.title}</span>}
+									</Link>
+								);
+							})}
 						</div>
-						{settingsMenu.map((item, idx) => {
-							const isActive = pathname === item.href;
-							return (
-								<Link
-									key={`settings-${idx}`}
-									href={item.href}
-									className={cn(
-										"flex items-center px-4 py-3 text-gray-600 transition-colors duration-200 transform rounded-lg dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800",
-										isActive &&
-											"bg-gray-100 dark:bg-gray-800 text-blue-600 dark:text-blue-400"
-									)}
-								>
-									<span className="mr-3">{item.icon}</span>
-									<span className="text-sm font-medium">{item.title}</span>
-								</Link>
-							);
-						})}
-					</div>
-				</nav>
 
-				<div className="mt-6">
-					<div className="p-4 bg-gray-100 rounded-lg dark:bg-gray-800">
-						<p className="text-xs font-medium text-gray-500 dark:text-gray-400">
-							Need help?{" "}
-							<a
-								href="#"
-								className="text-blue-600 underline hover:text-blue-500 dark:text-blue-400"
-							>
-								Contact support
-							</a>
-						</p>
-					</div>
+						<div className="pt-4 mt-4 border-t border-gray-200 dark:border-gray-700 px-2">
+							<div className="space-y-1">
+								{settingsMenu.map((item, idx) => {
+									const isActive = pathname === item.href;
+									return (
+										<Link
+											key={`settings-${idx}`}
+											href={item.href}
+											className={cn(
+												"flex items-center px-3 py-3 text-sm font-medium rounded-md transition-colors",
+												isActive
+													? "bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+													: "text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+											)}
+										>
+											<span className="flex-shrink-0">{item.icon}</span>
+											{!isCollapsed && (
+												<span className="ml-3">{item.title}</span>
+											)}
+										</Link>
+									);
+								})}
+							</div>
+						</div>
+					</nav>
 
-					<button
-						onClick={handleSignOut}
-						className="flex items-center w-full px-4 py-3 mt-4 text-sm font-medium text-red-600 transition-colors duration-200 transform rounded-lg dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
-					>
-						<IoLogOutOutline className="w-5 h-5 mr-3" />
-						<span>Logout</span>
-					</button>
+					{/* Bottom section */}
+					<div className="p-4 border-t border-gray-200 dark:border-gray-700">
+						<button
+							onClick={handleSignOut}
+							className={cn(
+								"flex items-center w-full px-3 py-2 text-sm font-medium text-red-600 rounded-md transition-colors",
+								"hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20",
+								isCollapsed ? "justify-center" : ""
+							)}
+						>
+							<IoLogOutOutline className="h-5 w-5 flex-shrink-0" />
+							{!isCollapsed && <span className="ml-3">Logout</span>}
+						</button>
+					</div>
 				</div>
-			</div>
-		</div>
+			</aside>
+		</>
 	);
 };
 
