@@ -1,7 +1,7 @@
 // src/components/review-form.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, FormEvent } from "react";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,52 +9,79 @@ import { Star } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
-export function ReviewForm({
-	productId,
-	onReviewSubmit,
-}: {
+interface ReviewFormProps {
 	productId: string;
-	onReviewSubmit: () => void;
-}) {
+	onReviewSubmit?: () => void;
+}
+
+export function ReviewForm({ productId, onReviewSubmit }: ReviewFormProps) {
 	const { data: session } = useSession();
 	const router = useRouter();
 	const [rating, setRating] = useState(0);
 	const [comment, setComment] = useState("");
 	const [isSubmitting, setIsSubmitting] = useState(false);
+	const [hoverRating, setHoverRating] = useState(0);
 
-	const handleSubmit = async (e: React.FormEvent) => {
+	const handleSubmit = async (e: FormEvent) => {
 		e.preventDefault();
 
 		if (!session) {
 			toast.error("Please sign in to submit a review");
+			router.push("/login");
 			return;
 		}
 
-		if (!rating || !comment.trim()) {
-			toast.error("Please provide both a rating and a comment");
+		if (!productId) {
+			toast.error("Product ID is missing. Please try again.");
+			return;
+		}
+
+		if (rating === 0) {
+			toast.error("Please select a rating");
+			return;
+		}
+
+		if (!comment.trim()) {
+			toast.error("Please enter your review comment");
 			return;
 		}
 
 		try {
 			setIsSubmitting(true);
-			const response = await fetch(`/api/products/${productId}/reviews`, {
+
+			const response = await fetch("/api/reviews", {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
 				},
-				body: JSON.stringify({ rating, comment }),
+				body: JSON.stringify({
+					productId,
+					rating,
+					comment: comment.trim(),
+					userId: session.user.id,
+				}),
 			});
 
 			const data = await response.json();
 
 			if (!response.ok) {
-				throw new Error(data.message || "Failed to submit review");
+				throw new Error(data.error || "Failed to submit review");
 			}
 
-			toast.success("Review submitted successfully!");
+			// Reset form
 			setRating(0);
 			setComment("");
-			onReviewSubmit(); // Refresh reviews
+			setHoverRating(0);
+
+			toast.success("Thank you for your review!");
+
+			// Call the onReviewSubmit callback if provided
+			if (onReviewSubmit) {
+				onReviewSubmit();
+			}
+
+			// Refresh the page to show the new review
+			router.refresh();
 		} catch (error) {
 			console.error("Error submitting review:", error);
 			toast.error(
@@ -65,56 +92,83 @@ export function ReviewForm({
 		}
 	};
 
-	if (!session) {
-		return (
-			<div className="mt-6 p-4 bg-gray-50 rounded-lg text-center">
-				<p className="text-gray-600">Please sign in to write a review</p>
-				<Button
-					onClick={() => router.push("/auth/signin")}
-					className="mt-2"
-					variant="outline"
-				>
-					Sign In
-				</Button>
-			</div>
-		);
-	}
-
 	return (
-		<div className="mt-6 p-4 border rounded-lg">
-			<h3 className="text-lg font-medium mb-4">Write a Review</h3>
-			<form onSubmit={handleSubmit}>
-				<div className="flex items-center mb-4">
-					<span className="mr-2">Rating:</span>
+		<div className="space-y-4">
+			<h3 className="text-lg font-medium">Write a Review</h3>
+			<form onSubmit={handleSubmit} className="space-y-4">
+				<div className="flex items-center space-x-1">
 					{[1, 2, 3, 4, 5].map((star) => (
 						<button
 							key={star}
 							type="button"
-							onClick={() => setRating(star)}
 							className="focus:outline-none"
+							onClick={() => setRating(star)}
+							onMouseEnter={() => setHoverRating(star)}
+							onMouseLeave={() => setHoverRating(0)}
 						>
 							<Star
 								className={`h-6 w-6 ${
-									star <= rating
+									(hoverRating || rating) >= star
 										? "fill-yellow-400 text-yellow-400"
 										: "text-gray-300"
 								}`}
 							/>
 						</button>
 					))}
+					<span className="ml-2 text-sm text-muted-foreground">
+						{rating > 0
+							? `${rating} star${rating > 1 ? "s" : ""}`
+							: "Rate this product"}
+					</span>
 				</div>
-				<Textarea
-					value={comment}
-					onChange={(e) => setComment(e.target.value)}
-					placeholder="Share your thoughts about this product..."
-					className="min-h-[100px]"
-					required
-				/>
-				<div className="mt-4">
-					<Button type="submit" disabled={isSubmitting}>
-						{isSubmitting ? "Submitting..." : "Submit Review"}
-					</Button>
+
+				<div className="space-y-2">
+					<Textarea
+						placeholder="Share your experience with this product..."
+						value={comment}
+						onChange={(e) => setComment(e.target.value)}
+						rows={4}
+						className="min-h-[100px]"
+						disabled={isSubmitting}
+						required
+					/>
 				</div>
+
+				<Button
+					type="submit"
+					disabled={isSubmitting || !session}
+					className="w-full sm:w-auto"
+				>
+					{isSubmitting ? (
+						<>
+							<svg
+								className="animate-spin -ml-1 mr-2 h-4 w-4"
+								xmlns="http://www.w3.org/2000/svg"
+								fill="none"
+								viewBox="0 0 24 24"
+							>
+								<circle
+									className="opacity-25"
+									cx="12"
+									cy="12"
+									r="10"
+									stroke="currentColor"
+									strokeWidth="4"
+								></circle>
+								<path
+									className="opacity-75"
+									fill="currentColor"
+									d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+								></path>
+							</svg>
+							Submitting...
+						</>
+					) : session ? (
+						"Submit Review"
+					) : (
+						"Sign in to Review"
+					)}
+				</Button>
 			</form>
 		</div>
 	);
