@@ -16,12 +16,12 @@ await connectDB().catch((error) => {
 
 // GET /api/categories/[id]
 export async function GET(
-	request: Request,
-	{ params }: { params: { id: string } }
+  request: Request,
+  { params }: { params: { id: string } }
 ) {
-	try {
-		const category = await Category.findById(params.id);
-		if (!category) {
+  try {
+    const category = await Category.findById(params.id);
+    if (!category) {
 			return NextResponse.json(
 				{ success: false, message: "Category not found" },
 				{ status: 404 }
@@ -179,8 +179,8 @@ export async function PUT(
 
 // DELETE /api/categories/[id]
 export async function DELETE(
-	request: Request,
-	{ params }: { params: { id: string } }
+  request: Request,
+  { params }: { params: { id: string } }
 ) {
 	try {
 		// Check authentication

@@ -9,13 +9,7 @@ export interface IProduct extends Document {
 		public_id: string;
 		url: string;
 	}>;
-	category:
-		| string
-		| {
-				_id: string;
-				name: string;
-				[key: string]: any;
-		};
+	category: Schema.Types.Mixed;
 	stock: number;
 	ratings: number;
 	reviews: Array<{

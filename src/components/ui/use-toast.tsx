@@ -1,11 +1,10 @@
 "use client"
 
-import * as React from "react"
-import { Cross2Icon } from "@radix-ui/react-icons"
 import type { ToastProps as RadixToastProps } from "@radix-ui/react-toast"
+import * as React from "react"
 
-import { useIsMounted } from "@/lib/hooks/use-is-mounted"
 import { Toast, ToastClose, ToastDescription, ToastProvider, ToastTitle, ToastViewport } from "@/components/ui/toast"
+import { useIsMounted } from "@/lib/hooks/use-is-mounted"
 
 const TOAST_LIMIT = 1
 const TOAST_REMOVE_DELAY = 1000000
@@ -224,4 +223,4 @@ const Toaster: React.FC = () => {
   )
 }
 
-export { toast, useToast, Toaster }
+export { toast, Toaster, useToast }

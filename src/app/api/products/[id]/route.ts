@@ -1,7 +1,6 @@
-import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import Product from "@/models/Product";
-import mongoose from "mongoose";
+import { NextResponse } from "next/server";
 
 // Get product by ID
 // GET /api/products/[id]

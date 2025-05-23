@@ -4,11 +4,28 @@ import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { FcGoogle } from "react-icons/fc";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, Suspense } from "react";
 import { toast } from "sonner";
 import Link from "next/link";
 
+// Loading component for Suspense fallback
+function LoadingFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center">
+      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+    </div>
+  );
+}
+
 export default function SignInPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <SignInContent />
+    </Suspense>
+  );
+}
+
+function SignInContent() {
 	const searchParams = useSearchParams();
 	const router = useRouter();
 	const error = searchParams.get("error");

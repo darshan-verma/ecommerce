@@ -3,16 +3,14 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
 import {
 	Star,
-	Heart,
-	Share2,
+
 	Truck,
 	Shield,
-	RefreshCw,
+
 	ArrowLeft,
 	Minus,
 	Plus,

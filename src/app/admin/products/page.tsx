@@ -10,7 +10,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProductForm } from "@/components/forms/ProductForm";
 import { IProduct } from "@/models/Product";
-import { Button, toast, Toast } from "@/components/ui";
+import { Button, toast } from "@/components/ui";
 import { Input } from "@/components/ui/input";
 import {
 	Select,
