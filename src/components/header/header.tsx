@@ -58,7 +58,7 @@ export default function Header({ onCartClick }: HeaderProps) {
 						<span className="sr-only">Toggle menu</span>
 					</Button>
 					<Link href="/" className="flex items-center space-x-2">
-						<span className="text-xl font-bold">E-Commerce</span>
+						<span className="ml-2 text-xl font-bold">E-Commerce</span>
 					</Link>
 				</div>
 

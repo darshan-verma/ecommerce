@@ -1,35 +1,62 @@
+"use client";
+
+import { use, useState, useEffect } from "react";
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/utils";
 import { IProduct } from "@/models/Product";
+import { ReviewSection } from "@/components/review/review-section";
 
-export default async function ProductPage({
+export default function ProductPage({
 	params,
 }: {
-	params: { id: string };
+	params: Promise<{ id: string }>;
 }) {
-	// Fetch product data
-	const res = await fetch(`http://localhost:3000/api/products/${params.id}`, {
-		next: { revalidate: 60 },
-	});
+	// unwrap the params promise
+	const { id } = use(params);
 
-	if (!res.ok) {
-		console.error("Failed to fetch product. Status:", res.status);
-		notFound();
+	const [activeTab, setActiveTab] = useState<"description" | "reviews">(
+		"description"
+	);
+	const [product, setProduct] = useState<IProduct | null>(null);
+	const [isLoading, setIsLoading] = useState(true);
+
+	useEffect(() => {
+		const fetchProduct = async () => {
+			try {
+				const res = await fetch(`/api/products/${id}`, {
+					next: { revalidate: 60 },
+				});
+
+				if (!res.ok) {
+					throw new Error("Failed to fetch product");
+				}
+
+				const responseData = await res.json();
+				setProduct(responseData.data);
+			} catch (error) {
+				console.error("Error fetching product:", error);
+				notFound();
+			} finally {
+				setIsLoading(false);
+			}
+		};
+
+		fetchProduct();
+	}, [id]);
+
+	if (isLoading) {
+		return (
+			<div className="container mx-auto px-4 py-8 flex justify-center">
+				<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500" />
+			</div>
+		);
 	}
-
-	const responseData = await res.json();
-	console.log("API Response:", responseData);
-
-	const product: IProduct = responseData.data;
-	console.log("Product Data:", product);
 
 	if (!product) {
-		console.error("No product data found in response");
 		notFound();
 	}
-
 	return (
 		<div className="container mx-auto px-4 py-8">
 			<div className="grid md:grid-cols-2 gap-8">
@@ -51,7 +78,6 @@ export default async function ProductPage({
 							</div>
 						)}
 					</div>
-					{/* Add more image thumbnails here if needed */}
 				</div>
 
 				{/* Product Info */}
@@ -94,20 +120,45 @@ export default async function ProductPage({
 				</div>
 			</div>
 
-			{/* Product Details Tabs */}
+			{/* Tabs */}
 			<div className="mt-12">
 				<div className="border-b border-gray-200">
 					<nav className="flex -mb-px space-x-8">
-						<button className="border-b-2 border-primary-500 py-4 px-1 text-sm font-medium text-primary-600">
+						<button
+							onClick={() => setActiveTab("description")}
+							className={`py-4 px-1 text-sm font-medium ${
+								activeTab === "description"
+									? "border-b-2 border-primary-500 text-primary-600"
+									: "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
+							}`}
+						>
 							Description
 						</button>
-						<button className="border-transparent border-b-2 py-4 px-1 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700">
+						<button
+							onClick={() => setActiveTab("reviews")}
+							className={`py-4 px-1 text-sm font-medium ${
+								activeTab === "reviews"
+									? "border-b-2 border-primary-500 text-primary-600"
+									: "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
+							}`}
+						>
 							Reviews ({product.reviews?.length || 0})
 						</button>
 					</nav>
 				</div>
+
 				<div className="py-6">
-					<p className="text-gray-600">{product.description}</p>
+					{activeTab === "description" && (
+						<div>
+							<p className="text-gray-600">{product.description}</p>
+						</div>
+					)}
+
+					{activeTab === "reviews" && (
+						<div className="mt-4">
+							<ReviewSection id={product.id} />
+						</div>
+					)}
 				</div>
 			</div>
 		</div>

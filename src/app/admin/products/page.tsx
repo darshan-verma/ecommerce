@@ -30,6 +30,15 @@ import {
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Pencil, Trash2 } from "lucide-react";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 
 interface Category {
 	_id: string;
@@ -125,17 +134,21 @@ export default function AdminProductsPage() {
 
 				const url = new URL("/api/products", window.location.origin);
 				url.searchParams.set("page", page.toString());
-				url.searchParams.set("limit", "9");
+				url.searchParams.set("limit", "10");
 
 				if (debouncedSearchQuery) {
 					url.searchParams.set("keyword", debouncedSearchQuery);
 				}
 
-				if (selectedCategory) {
+				// Only add category filter if it's selected
+				if (selectedCategory && selectedCategory !== "all") {
+					console.log("Adding category filter to API call:", selectedCategory);
 					url.searchParams.set("category", selectedCategory);
+				} else {
+					console.log("No category filter or 'all' selected");
 				}
 
-				console.log("Fetching products...", url.toString());
+				console.log("Fetching products from:", url.toString());
 				const response = await fetch(url.toString(), {
 					cache: "no-store",
 					headers: {
@@ -157,7 +170,7 @@ export default function AdminProductsPage() {
 						page: data.page || 1,
 						pages: data.pages || 1,
 						total: data.total || 0,
-						limit: 9,
+						limit: 10,
 					});
 				}
 			} catch (error) {
@@ -191,20 +204,10 @@ export default function AdminProductsPage() {
 
 	// Filter and sort products
 	const filteredAndSortedProducts = useMemo(() => {
+		console.log("Sorting products...");
 		let result = [...products];
 
-		// Apply search
-		if (debouncedSearchQuery) {
-			const query = debouncedSearchQuery.toLowerCase();
-			result = result.filter(
-				(product) =>
-					product.name.toLowerCase().includes(query) ||
-					product.description.toLowerCase().includes(query) ||
-					product.category.toLowerCase().includes(query)
-			);
-		}
-
-		// Apply sorting
+		// Only apply sorting, filtering is done by the API
 		switch (sortOption) {
 			case "price-asc":
 				result.sort((a, b) => a.price - b.price);
@@ -235,7 +238,7 @@ export default function AdminProductsPage() {
 		}
 
 		return result;
-	}, [products, debouncedSearchQuery, sortOption]);
+	}, [products, sortOption]);
 
 	// Handle form submission
 	const handleSubmit = async (data: any) => {
@@ -343,7 +346,7 @@ export default function AdminProductsPage() {
 				? product.images.map((img) => ({
 						public_id: img?.public_id || "",
 						url: img?.url || "",
-				}))
+				  }))
 				: [],
 			category: getCategoryId(product.category),
 			stock: product.stock || 0,
@@ -472,8 +475,10 @@ export default function AdminProductsPage() {
 							<Select
 								value={selectedCategory}
 								onValueChange={(value) => {
-									setSelectedCategory(value === "all" ? "" : value);
+									console.log("Category selected:", value);
+									setSelectedCategory(value);
 									setPagination((prev) => ({ ...prev, page: 1 }));
+									fetchProducts(1); // Trigger a new fetch when category changes
 								}}
 							>
 								<SelectTrigger>
@@ -571,43 +576,80 @@ export default function AdminProductsPage() {
 									</p>
 								</div>
 							) : (
-								<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-									{filteredAndSortedProducts.map((product) => (
-										<Card key={product._id.toString()} className="relative">
-											<div className="absolute top-2 right-2 flex gap-2">
-												<Button
-													variant="outline"
-													size="icon"
-													className="h-8 w-8"
-													onClick={() => handleEditClick(product)}
-												>
-													<Pencil className="h-4 w-4" />
-												</Button>
-												<Button
-													variant="outline"
-													size="icon"
-													className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-													onClick={() => handleDeleteClick(product._id)}
-												>
-													<Trash2 className="h-4 w-4" />
-												</Button>
-											</div>
-											<CardContent className="p-4">
-												<img
-													src={product.images?.[0]?.url || "/placeholder.svg"}
-													alt={product.name}
-													className="w-full h-48 object-cover rounded-md mb-4"
-												/>
-												<h3 className="font-semibold">{product.name}</h3>
-												<p className="text-sm text-muted-foreground">
-													${product.price.toFixed(2)}
-												</p>
-												<p className="text-sm text-muted-foreground">
-													{product.stock} in stock
-												</p>
-											</CardContent>
-										</Card>
-									))}
+								<div className="rounded-md border">
+									<Table>
+										<TableHeader>
+											<TableRow>
+												<TableHead className="w-[100px]">Image</TableHead>
+												<TableHead>Name</TableHead>
+												<TableHead>Category</TableHead>
+												<TableHead className="text-right">Price</TableHead>
+												<TableHead className="text-center">Stock</TableHead>
+												<TableHead className="text-right">Actions</TableHead>
+											</TableRow>
+										</TableHeader>
+										<TableBody>
+											{filteredAndSortedProducts.map((product) => {
+												const category = categories.find(
+													(cat) => cat._id === product.category
+												);
+												return (
+													<TableRow key={product._id.toString()}>
+														<TableCell>
+															<img
+																src={
+																	product.images?.[0]?.url || "/placeholder.svg"
+																}
+																alt={product.name}
+																className="h-12 w-12 rounded-md object-cover"
+															/>
+														</TableCell>
+														<TableCell className="font-medium">
+															{product.name}
+														</TableCell>
+														<TableCell>
+															<Badge variant="outline">
+																{category?.name || "Uncategorized"}
+															</Badge>
+														</TableCell>
+														<TableCell className="text-right">
+															${product.price.toFixed(2)}
+														</TableCell>
+														<TableCell className="text-center">
+															<Badge
+																variant={
+																	product.stock > 0 ? "default" : "destructive"
+																}
+															>
+																{product.stock} in stock
+															</Badge>
+														</TableCell>
+														<TableCell className="text-right">
+															<div className="flex justify-end gap-2">
+																<Button
+																	variant="ghost"
+																	size="icon"
+																	onClick={() => handleEditClick(product)}
+																>
+																	<Pencil className="h-4 w-4" />
+																	<span className="sr-only">Edit</span>
+																</Button>
+																<Button
+																	variant="ghost"
+																	size="icon"
+																	className="text-destructive hover:text-destructive/90"
+																	onClick={() => handleDeleteClick(product._id)}
+																>
+																	<Trash2 className="h-4 w-4" />
+																	<span className="sr-only">Delete</span>
+																</Button>
+															</div>
+														</TableCell>
+													</TableRow>
+												);
+											})}
+										</TableBody>
+									</Table>
 								</div>
 							)}
 						</CardContent>
@@ -628,7 +670,7 @@ export default function AdminProductsPage() {
 						</CardHeader>
 						<CardContent>
 							<ProductForm
-								product={editingProduct || undefined}
+								// product={editingProduct || undefined}
 								onSubmit={editingProduct ? handleUpdateProduct : handleSubmit}
 								onCancel={editingProduct ? handleCancelEdit : undefined}
 								isSubmitting={isSubmitting}

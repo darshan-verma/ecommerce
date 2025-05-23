@@ -25,7 +25,6 @@ export async function middleware(request: NextRequest) {
 		signInUrl.searchParams.set("callbackUrl", pathname);
 		return NextResponse.redirect(signInUrl);
 	}
-
 	// If user is already authenticated and tries to access sign-in/sign-up pages, redirect to home
 	const authRoutes = ["/auth/signin", "/auth/signup"];
 	if (authRoutes.includes(pathname) && token) {
